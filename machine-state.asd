@@ -17,3 +17,12 @@
   :depends-on (:documentation-utils
                :cffi)
   :in-order-to ((asdf:test-op (asdf:test-op :machine-state-test))))
+
+(asdf:defsystem machine-state/opengl
+  :version "1.0.0"
+  :license "zlib"
+  :author "Yukari Hafner <shinmera@tymoon.eu>"
+  :maintainer "Yukari Hafner <shinmera@tymoon.eu>"
+  :description "Additions for GPU state information using OpenGL"
+  :components ((:file "opengl"))
+  :depends-on (:machine-state :cl-opengl))
