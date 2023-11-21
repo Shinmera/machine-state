@@ -11,6 +11,9 @@
 (defmacro define-implementation (fun args &body body)
   `(defun ,fun ,args ,@body))
 
+(define-protocol-fun thread-time ((thread T)) ((unsigned-byte 64))
+  0)
+
 (define-protocol-fun process-io-bytes () ((unsigned-byte 64))
   0)
 
