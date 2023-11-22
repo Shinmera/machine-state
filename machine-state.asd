@@ -10,7 +10,7 @@
   :serial T
   :components ((:file "package")
                (:file "protocol")
-               (:file "windows" :if-feature :windows)
+               (:file "windows" :if-feature (:or :windows :win32))
                (:file "posix" :if-feature (:or :posix :linux :darwin :bsd))
                (:file "linux" :if-feature :linux)
                (:file "documentation"))

@@ -1,5 +1,14 @@
 (in-package #:org.shirakumo.machine-state)
 
+(cffi:define-foreign-library psapi
+  (:windows "Psapi.dll"))
+
+(cffi:define-foreign-library ntdll
+  (:windows "Ntdll.dll"))
+
+(cffi:use-foreign-library psapi)
+(cffi:use-foreign-library ntdll)
+
 (defmacro windows-call (function &rest args)
   `(unless (cffi:foreign-funcall ,function ,@args)
      (fail (org.shirakumo.com-on:error-message))))
@@ -40,7 +49,7 @@
                   :pointer (cffi:foreign-funcall "GetCurrentProcess" :pointer)
                   :pointer memory-counters
                   :bool)
-    (working-set-size memory-counters)))
+    (memory-counters-working-set-size memory-counters)))
 
 (define-implementation process-time ()
   (cffi:with-foreign-objects ((creation-time :uint64)

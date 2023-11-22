@@ -42,7 +42,7 @@
 (define-protocol-fun thread-core-mask ((thread T)) ((unsigned-byte 64))
   (1- (ash 1 (machine-cores))))
 
-(define-protocol-fun (setf thread-core-mask) ((mask (unsigned-byte 64)) (thread T)) (bit-(unsigned-byte 64))
+(define-protocol-fun (setf thread-core-mask) ((mask (unsigned-byte 64)) (thread T)) ((unsigned-byte 64))
   (thread-core-mask thread))
 
 (define-protocol-fun gc-room () ((unsigned-byte 64) (unsigned-byte 64))
