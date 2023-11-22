@@ -1,6 +1,13 @@
 (in-package #:org.shirakumo.machine-state)
 
 (docs:define-docs
+  (type query-failed
+    "Error signalled if a query should fail for some reason.
+
+This condition is *NOT* signalled if the function is simply
+unsupported. It is however signalled if an OS call failed for some
+reason such as lack of access permissions.")
+  
   (function process-io-bytes
     "Returns the number of bytes of IO performed by the process.
 
@@ -111,6 +118,10 @@ Returns two values:
 If the function is unsupported a constant 0 is returned for both
 values.
 
+You may want to load the machine-state/opengl library to make this
+function useful. In that case, it will only work if an OpenGL context
+is current to this thread.
+
 See MACHINE-ROOM
 See PROCESS-ROOM
 See GC-ROOM")
@@ -119,6 +130,10 @@ See GC-ROOM")
     "Returns the amount of processing time spent on the GPU by this process.
 
 If the function is unsupported a constant 0.0d0 is returned.
+
+You may want to load the machine-state/opengl library to make this
+function useful. In that case, it will only work if an OpenGL context
+is current to this thread.
 
 See PROCESS-TIME
 See GC-TIME
