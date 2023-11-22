@@ -1,0 +1,5 @@
+## About machine-state
+This library implements various functions to access status information about the machine, process, etc.
+
+## How To
+Since this is a toolkit library, please simply refer to the symbol index for available functions and their behaviour.
