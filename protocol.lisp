@@ -55,7 +55,10 @@
                   (+ free used)))
   #+ecl
   (values (si:gc-stats T) (ext:get-limit 'ext:heap-size))
-  #-(or ccl sbcl ecl)
+  #+clasp
+  (values (- (sys:dynamic-space-size) (sys:dynamic-usage))
+          (sys:dynamic-space-size))
+  #-(or ccl sbcl ecl clasp)
   (values 0 0))
 
 (define-protocol-fun gc-time () (double-float)
@@ -68,7 +71,10 @@
   #+(and ecl (not boehm-gc))
   (/ (float (si::gc-time) 0d0)
      INTERNAL-TIME-UNITS-PER-SECOND)
-  #-(or ccl sbcl (and ecl (not boehm-gc)))
+  #+clasp
+  (/ (float (sys:gc-real-time) 0d0)
+     INTERNAL-TIME-UNITS-PER-SECOND)
+  #-(or ccl sbcl (and ecl (not boehm-gc)) clasp)
   0d0)
 
 (define-protocol-fun gpu-room () ((unsigned-byte 64) (unsigned-byte 64))
