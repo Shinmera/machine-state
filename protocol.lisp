@@ -63,6 +63,9 @@
   #+ccl
   (/ (float (ccl:gctime) 0d0)
      INTERNAL-TIME-UNITS-PER-SECOND)
+  #+(and ecl (not boehm-gc))
+  (/ (float (si::gc-time) 0d0)
+     INTERNAL-TIME-UNITS-PER-SECOND)
   #-(or ccl sbcl)
   0d0)
 
