@@ -10,10 +10,8 @@
 
 (define-implementation gpu-room ()
   (macrolet ((jit (thing)
-               `(ignore-errors
-                 (return-from gpu-room
-                   (multiple-value-prog1 ,thing
-                     (compile 'gpu-room '(lambda () ,thing)))))))
+               `(multiple-value-prog1 ,thing
+                  (compile 'gpu-room '(lambda () ,thing)))))
     (case (gl-vendor)
       ;; https://www.khronos.org/registry/OpenGL/extensions/ATI/ATI_meminfo.txt
       (:amd
@@ -31,7 +29,7 @@
               (values vidmem-free
                       vidmem-total))))
       (:intel
-       (jit (process-room)))
+       (jit (gc-room)))
       (T (jit (values 0 0))))))
 
 (let ((+gpu-time-query-object+ NIL)
