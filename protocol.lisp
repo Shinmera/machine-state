@@ -55,7 +55,7 @@
                   (+ free used)))
   #+ecl
   (values (si:gc-stats T) (ext:get-limit 'ext:heap-size))
-  #-(or ccl sbcl)
+  #-(or ccl sbcl ecl)
   (values 0 0))
 
 (define-protocol-fun gc-time () (double-float)
@@ -68,7 +68,7 @@
   #+(and ecl (not boehm-gc))
   (/ (float (si::gc-time) 0d0)
      INTERNAL-TIME-UNITS-PER-SECOND)
-  #-(or ccl sbcl)
+  #-(or ccl sbcl (and ecl (not boehm-gc)))
   0d0)
 
 (define-protocol-fun gpu-room () ((unsigned-byte 64) (unsigned-byte 64))
