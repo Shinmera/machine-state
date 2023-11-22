@@ -53,6 +53,8 @@
               (used (ccl::%usedbytes)))
           (values used
                   (+ free used)))
+  #+ecl
+  (values (si:gc-stats T) (ext:get-limit 'ext:heap-size))
   #-(or ccl sbcl)
   (values 0 0))
 
