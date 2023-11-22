@@ -15,7 +15,9 @@
                (:file "linux" :if-feature :linux)
                (:file "documentation"))
   :depends-on (:documentation-utils
-               :cffi)
+               :cffi
+               :bordeaux-threads
+               (:feature :windows :com-on))
   :in-order-to ((asdf:test-op (asdf:test-op :machine-state-test))))
 
 (asdf:defsystem machine-state/opengl

@@ -1,1 +1,14 @@
 (in-package #:org.shirakumo.machine-state)
+
+(define-implementation process-io-bytes ()
+  ;; KLUDGE: we do this in C to avoid the stream system overhead.
+  (cffi:with-foreign-object (io :char 1024)
+    (let ((file (cffi:foreign-funcall "fopen" :string "/proc/self/io" :string "rb" :pointer)))
+      (cffi:foreign-funcall "fread" :pointer io :size 1 :size 1024 :pointer file :size)
+      (cffi:foreign-funcall "fclose" :pointer file :void))
+    (flet ((read-int (field)
+             (let* ((start (cffi:foreign-funcall "strstr" :pointer io :string field :pointer))
+                    (ptr (cffi:inc-pointer start (length field))))
+               (cffi:foreign-funcall "atoi" :pointer ptr :int))))
+      (+ (read-int "read_bytes: ")
+         (read-int "write_bytes: ")))))
