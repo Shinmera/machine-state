@@ -68,7 +68,6 @@
   ;; _SC_NPROCESSORS_ONLN 84
   (posix-call "sysconf" :int 84 :long))
 
-;; thread
 (defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
   `(if (or (eql ,thread T)
            (eql ,thread (bt:current-thread)))
@@ -76,3 +75,24 @@
          ,@body)
        ,default))
 
+(define-implementation thread-time (thread)
+  (with-thread-handle (handle thread 0)
+    (cffi:with-foreign-object (rusage '(:struct rusage))
+      (posix-call "getrusage" :int 1 :pointer rusage :int)
+      (+ (timeval-sec rusage)
+         (* (timeval-usec rusage) 10e-7)))))
+
+(define-implementation thread-core-mask (thread)
+  (with-thread-handle (handle thread (1- (ash 1 (machine-cores))))
+    (cffi:with-foreign-objects ((cpuset :uint64))
+      (unless (= 0 (cffi:foreign-funcall "pthread_getaffinity_np" :pointer handle :size (cffi:foreign-type-size :uint64) :pointer cpuset :int))
+        (fail (cffi:foreign-funcall "strerror" :int64 errno)))
+      (cffi:mem-ref cpuset :uint64))))
+
+(define-implementation (setf thread-core-mask) (mask thread)
+  (with-thread-handle (handle thread (1- (ash 1 (machine-cores))))
+    (cffi:with-foreign-objects ((cpuset :uint64))
+      (setf (cffi:mem-ref cpuset :uint64) mask)
+      (unless (= 0 (cffi:foreign-funcall "pthread_setaffinity_np" :pointer handle :size (cffi:foreign-type-size :uint64) :pointer cpuset :int))
+        (fail (cffi:foreign-funcall "strerror" :int64 errno)))
+      (cffi:mem-ref cpuset :uint64))))

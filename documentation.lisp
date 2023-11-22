@@ -66,7 +66,8 @@ See GPU-TIME")
     "Accessor to the CPU core affinity mask of the thread.
 
 The mask is a bitfield where each set bit in the integer designates a
-core that the thread may be executed on.
+core that the thread may be executed on. For compatibility reasons
+only integers up to 64 bits are supported.
 
 Thread may be T for the current thread, or a BT:THREAD.
 
