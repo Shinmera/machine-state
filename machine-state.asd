@@ -11,7 +11,7 @@
   :components ((:file "package")
                (:file "protocol")
                (:file "windows" :if-feature :windows)
-               (:file "posix" :if-feature :posix)
+               (:file "posix" :if-feature (:or :posix :linux :darwin :bsd))
                (:file "linux" :if-feature :linux)
                (:file "documentation"))
   :depends-on (:documentation-utils
