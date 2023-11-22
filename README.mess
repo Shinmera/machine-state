@@ -3,3 +3,11 @@ This library implements various functions to access status information about the
 
 ## How To
 Since this is a toolkit library, please simply refer to the symbol index for available functions and their behaviour.
+
+## Implementation Support
+Fetching information about threads that aren't the current one, or GC related information requires implementation support. The following implementations are fully or partially supported:
+
+- CCL
+- Clasp
+- ECL
+- SBCL
