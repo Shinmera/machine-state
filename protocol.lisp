@@ -49,13 +49,22 @@
   #+sbcl
   (values (- (sb-ext:dynamic-space-size) (sb-kernel:dynamic-usage))
           (sb-ext:dynamic-space-size))
-  #-sbcl (values 0 0))
+  #+ccl (let ((free (ccl::%freebytes))
+              (used (ccl::%usedbytes)))
+          (values used
+                  (+ free used)))
+  #-(or ccl sbcl)
+  (values 0 0))
 
 (define-protocol-fun gc-time () (double-float)
   #+sbcl
   (/ (float sb-ext:*gc-real-time* 0d0)
      INTERNAL-TIME-UNITS-PER-SECOND)
-  #-sbcl 0d0)
+  #+ccl
+  (/ (float (ccl:gctime) 0d0)
+     INTERNAL-TIME-UNITS-PER-SECOND)
+  #-(or ccl sbcl)
+  0d0)
 
 (define-protocol-fun gpu-room () ((unsigned-byte 64) (unsigned-byte 64))
   (values 0 0))
