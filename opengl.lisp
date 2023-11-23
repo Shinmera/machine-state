@@ -22,13 +22,13 @@
                    (total (+ (aref vbo-free-memory-ati 0)
                              (aref tex-free-memory-ati 0)
                              (aref buf-free-memory-ati 0))))
-              (values total total))))
+              (values (* 1024 total) (* 1024 total)))))
       ;; http://developer.download.nvidia.com/opengl/specs/GL_NVX_gpu_memory_info.txt
       (:nvidia
        (jit (let ((vidmem-total (gl:get-integer #x9047 1))
                   (vidmem-free  (gl:get-integer #x9049 1)))
-              (values vidmem-free
-                      vidmem-total))))
+              (values (* 1024 vidmem-free)
+                      (* 1024 vidmem-total)))))
       (:intel
        (jit (gc-room)))
       (T (jit (values 0 0))))))
