@@ -8,6 +8,7 @@
           ((search "AMD" vendor) :amd)
           (T :unknown))))
 
+(declaim (notinline gpu-room))
 (define-implementation gpu-room ()
   (macrolet ((jit (thing)
                `(multiple-value-prog1 ,thing
