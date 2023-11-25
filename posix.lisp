@@ -78,7 +78,7 @@
        ,default))
 
 (define-implementation thread-time (thread)
-  (with-thread-handle (handle thread 0)
+  (with-thread-handle (handle thread 0d0)
     (cffi:with-foreign-object (rusage '(:struct rusage))
       (posix-call "getrusage" :int 1 :pointer rusage :int)
       (+ (timeval-sec rusage)
