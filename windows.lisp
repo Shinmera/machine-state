@@ -64,7 +64,7 @@
                   :pointer user-time
                   :bool)
     (* (float (cffi:mem-ref user-time :uint64) 0d0)
-       10e-9)))
+       10d-9)))
 
 (cffi:defcstruct (memory-status :conc-name memory-status-)
   (length :uint32)
@@ -124,7 +124,7 @@
                     :pointer user-time
                     :bool)
       (* (float (cffi:mem-ref user-time :uint64) 0d0)
-         10e-9))))
+         10d-9))))
 
 (cffi:defcstruct (thread-info :conc-name thread-info-)
   (exit-status :uint32)
