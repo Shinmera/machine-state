@@ -42,7 +42,7 @@
   (cffi:with-foreign-object (rusage '(:struct rusage))
     (posix-call "getrusage" :int 0 :pointer rusage :int)
     (+ (timeval-sec rusage)
-       (* (timeval-usec rusage) 10e-7))))
+       (* (timeval-usec rusage) 10d-7))))
 
 (cffi:defcstruct (sysinfo :conc-name sysinfo-)
   (uptime :long)
@@ -82,7 +82,7 @@
     (cffi:with-foreign-object (rusage '(:struct rusage))
       (posix-call "getrusage" :int 1 :pointer rusage :int)
       (+ (timeval-sec rusage)
-         (* (timeval-usec rusage) 10e-7)))))
+         (* (timeval-usec rusage) 10d-7)))))
 
 (define-implementation thread-core-mask (thread)
   (with-thread-handle (handle thread (1- (ash 1 (machine-cores))))
