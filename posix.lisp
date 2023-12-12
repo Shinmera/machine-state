@@ -35,7 +35,7 @@
   (cffi:with-foreign-object (rusage '(:struct rusage))
     (posix-call "getrusage" :int 0 :pointer rusage :int)
     (* 1024 (+ (rusage-ixrss rusage)
-               (rusage-xdrss rusage)
+               (rusage-idrss rusage)
                (rusage-isrss rusage)))))
 
 (define-implementation process-time ()
