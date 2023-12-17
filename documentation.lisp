@@ -89,7 +89,7 @@ returned, which may differ from the one you tried to set.")
 This does not include foreign memory usage.
 
 Returns two values:
-  The number of bytes occupied
+  The number of free bytes
   The total number of bytes available
 
 If the function is unsupported a constant 0 is returned for both
@@ -112,7 +112,7 @@ See THREAD-TIME")
     "Returns the GPU's memory usage statistics.
 
 Returns two values:
-  The number of bytes occupied
+  The number of free bytes
   The total number of bytes available
 
 If the function is unsupported a constant 0 is returned for both

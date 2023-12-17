@@ -51,7 +51,7 @@
           (sb-ext:dynamic-space-size))
   #+ccl (let ((free (ccl::%freebytes))
               (used (ccl::%usedbytes)))
-          (values used
+          (values free
                   (+ free used)))
   #+ecl
   (values (si:gc-stats T) (ext:get-limit 'ext:heap-size))
