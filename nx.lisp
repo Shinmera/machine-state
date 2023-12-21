@@ -1,0 +1,45 @@
+(in-package #:org.shirakumo.machine-state)
+
+(defmacro nxgl-call (func &rest args)
+  `(when (= 0 (cffi:foreign-funcall ,func ,@args :int))
+     (fail)))
+
+(define-implementation process-room ()
+  (cffi:with-foreign-objects ((free :int) (total :int))
+    (nxgl-call "nxgl_ram" :pointer free :pointer total)
+    (- (cffi:mem-ref total :int) (cffi:mem-ref free :int))))
+
+(define-implementation machine-room ()
+  (cffi:with-foreign-objects ((free :int) (total :int))
+    (nxgl-call "nxgl_ram" :pointer free :pointer total)
+    (values (- (cffi:mem-ref total :int) (cffi:mem-ref free :int))
+            (cffi:mem-ref total :int))))
+
+(define-implementation machine-cores ()
+  (cffi:foreign-funcall "nxgl_core_count" :int))
+
+(defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
+  `(if (or (eql ,thread T)
+           (eql ,thread (bt:current-thread)))
+       (let ((,handle (cffi:null-pointer)))
+         ,@body)
+       ,default))
+
+(define-implementation thread-core-mask (thread)
+  (with-thread-handle (handle thread (1- (ash 1 (machine-cores))))
+    (cffi:with-foreign-objects ((mask :int))
+      (nxgl-call "nxgl_get_core_mask" :pointer handle :pointer mask)
+      (cffi:mem-ref mask :int))))
+
+(define-implementation (setf thread-core-mask) (mask-int thread)
+  (with-thread-handle (handle thread (1- (ash 1 (machine-cores))))
+    (cffi:with-foreign-objects ((mask-ptr :int))
+      (setf (cffi:mem-ref mask :int) mask-int)
+      (nxgl-call "nxgl_set_core_mask" :pointer handle :pointer mask)
+      (cffi:mem-ref mask :int))))
+
+(define-implementation gpu-room ()
+  (cffi:with-foreign-objects ((free :int) (total :int))
+    (nxgl-call "nxgl_vram" :pointer free :pointer total)
+    (values (cffi:mem-ref free :int)
+            (cffi:mem-ref total :int))))
