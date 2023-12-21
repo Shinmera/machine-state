@@ -11,3 +11,4 @@ Fetching information about threads that aren't the current one, or GC related in
 - Clasp
 - ECL
 - SBCL
+- Mezzano
