@@ -13,6 +13,7 @@
                (:file "windows" :if-feature (:or :windows :win32))
                (:file "posix" :if-feature (:or :posix :linux :darwin :bsd))
                (:file "linux" :if-feature :linux)
+	       (:file "mezzano" :if-feature :mezzano)
                (:file "documentation"))
   :depends-on (:documentation-utils
                :cffi
