@@ -98,9 +98,9 @@
 
 (define-implementation machine-cores ()
   (cffi:with-foreign-objects ((system-info '(:struct system-info)))
-    (windows-call "GetSystemInfo"
-                  :pointer system-info
-                  :bool)
+    (cffi:foreign-funcall "GetSystemInfo"
+                          :pointer system-info
+                          :void)
     (system-info-number-of-processors system-info)))
 
 (defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
