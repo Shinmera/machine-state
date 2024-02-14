@@ -37,8 +37,12 @@
       (+gpu-time+ 0))
   (define-implementation gpu-time ()
     (cond (+gpu-time-query-object+
-           (gl:end-query :time-elapsed)
-           (incf +gpu-time+ (gl:get-query-object +gpu-time-query-object+ :query-result)))
+           (handler-case
+               (progn
+                 (gl:end-query :time-elapsed)
+                 (incf +gpu-time+ (gl:get-query-object +gpu-time-query-object+ :query-result)))
+             (gl:opengl-error ()
+               (setf +gpu-time-query-object+ (first (gl:gen-queries 1))))))
           (T
            (setf +gpu-time-query-object+ (first (gl:gen-queries 1)))))
     (gl:begin-query :time-elapsed +gpu-time-query-object+)
