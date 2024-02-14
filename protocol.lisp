@@ -63,9 +63,12 @@
 
 (define-protocol-fun gc-time () (double-float)
   #+sbcl
-  (/ #.(if (find-symbol "*GC-REAL-TIME*" "SB-EXT")
-           '(float sb-ext:*gc-real-time* 0d0)
-           0d0)
+  (/ #.(cond ((find-symbol "*GC-REAL-TIME*" "SB-EXT")
+              '(float sb-ext:*gc-real-time* 0d0))
+             ((find-symbol "*GC-RUN-TIME*" "SB-EXT")
+              '(float sb-ext:*gc-run-time* 0d0))
+             (T
+              0d0))
      INTERNAL-TIME-UNITS-PER-SECOND)
   #+ccl
   (/ (float (ccl:gctime) 0d0)
