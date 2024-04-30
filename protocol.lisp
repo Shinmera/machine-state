@@ -54,11 +54,24 @@
           (values free
                   (+ free used)))
   #+ecl
-  (values (si:gc-stats T) (ext:get-limit 'ext:heap-size))
+  (values #+boehm-gc (si:gc-stats T)
+          #-boehm-gc 0
+          (ext:get-limit 'ext:heap-size))
   #+clasp
   (values (- (sys:dynamic-space-size) (sys:dynamic-usage))
           (sys:dynamic-space-size))
-  #-(or ccl sbcl ecl clasp)
+  #+abcl
+  (let* ((runtime (java:jstatic "getRuntime"
+                                (java:jclass "java.lang.Runtime")))
+         ;; TODO: maxMemory? What does this method mean?
+         (total-memory (java:jcall "totalMemory" runtime))
+         (free-memory (java:jcall "freeMemory" runtime)))
+    (values free-memory total-memory))
+  #+clisp
+  (multiple-value-bind (used room)
+      (sys::%room)
+    (values used (+ used room)))
+  #-(or ccl sbcl ecl clasp abcl clisp)
   (values 0 0))
 
 (define-protocol-fun gc-time () (double-float)
