@@ -98,3 +98,42 @@
 
 (define-protocol-fun gpu-time () (double-float)
   0d0)
+
+(define-protocol-fun stack-room () ((unsigned-byte 64) (unsigned-byte 64))
+  #+ccl
+  (multiple-value-bind (stack stack-used)
+      (ccl::%stack-space)
+    (values stack-used stack))
+  #+ecl
+  (values 0 (ext:get-limit 'ext:lisp-stack))
+  #+sbcl
+  (values
+   ;; FIXME: This is implemented the way it is because sometimes
+   ;; either of +all-spaces+ or +stack-spaces+ is undefined due to
+   ;; SBCL-internal magic -- aartaka
+   (funcall (third (find :control-stack
+                         (ignore-errors
+                          (symbol-value
+                           (or (uiop:find-symbol* :+all-spaces+ :sb-vm nil)
+                               (uiop:find-symbol* :+stack-spaces+ :sb-vm nil))))
+                         :key #'first)))
+   (- sb-vm::*control-stack-end* sb-vm::*control-stack-start*))
+  #-(or ccl ecl sbcl)
+  (values 0 0))
+
+(define-protocol-fun static-room () ((unsigned-byte 64))
+  #+ccl
+  (multiple-value-bind (heap-used static-used staticlib-used frozen-space-size)
+      (ccl::%usedbytes)
+    (declare (ignorable heap-used))
+    (+ static-used staticlib-used frozen-space-size))
+  #+clisp
+  (nth-value 2 (sys::%room))
+  #+sbcl
+  (funcall (third (find :static
+                        (ignore-errors
+                         (symbol-value
+                          (uiop:find-symbol* :+all-spaces+ :sb-vm nil)))
+                        :key #'first)))
+  #+(or ccl clisp sbcl)
+  0)
