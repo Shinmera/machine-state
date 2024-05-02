@@ -97,7 +97,9 @@ values.
 
 See MACHINE-ROOM
 See PROCESS-ROOM
-See GPU-ROOM")
+See GPU-ROOM
+See STATIC-ROOM
+See STACK-ROOM")
   
   (function gc-time
     "Returns the amount of processing time spent in the GC.
@@ -124,7 +126,9 @@ is current to this thread.
 
 See MACHINE-ROOM
 See PROCESS-ROOM
-See GC-ROOM")
+See GC-ROOM
+See STATIC-ROOM
+See STACK-ROOM")
   
   (function gpu-time
     "Returns the amount of processing time spent on the GPU by this process.
@@ -137,4 +141,28 @@ is current to this thread.
 
 See PROCESS-TIME
 See GC-TIME
-See THREAD-TIME"))
+See THREAD-TIME")
+  
+  (function static-room
+    "Returns the static space size as an integer.
+
+If the function is unsupported zero is returned.
+
+See MACHINE-ROOM
+See PROCESS-ROOM
+See GC-ROOM
+See GPU-ROOM
+See STACK-ROOM")
+  
+  (function stack-room
+    "Return the stack usage statistics.
+
+Returns two values:
+  The number of free stack bytes
+  The total stack space available
+
+See MACHINE-ROOM
+See PROCESS-ROOM
+See GC-ROOM
+See GPU-ROOM
+See STATIC-ROOM"))
