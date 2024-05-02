@@ -103,21 +103,23 @@
   #+ccl
   (multiple-value-bind (stack stack-used)
       (ccl::%stack-space)
-    (values stack-used stack))
+    (values (- stack stack-used) stack))
   #+ecl
   (values 0 (ext:get-limit 'ext:lisp-stack))
   #+sbcl
-  (values
-   ;; FIXME: This is implemented the way it is because sometimes
-   ;; either of +all-spaces+ or +stack-spaces+ is undefined due to
-   ;; SBCL-internal magic -- aartaka
-   (funcall (third (find :control-stack
-                         (ignore-errors
-                          (symbol-value
-                           (or (uiop:find-symbol* :+all-spaces+ :sb-vm nil)
-                               (uiop:find-symbol* :+stack-spaces+ :sb-vm nil))))
-                         :key #'first)))
-   (- sb-vm::*control-stack-end* sb-vm::*control-stack-start*))
+  (let ((stack-total (- sb-vm::*control-stack-end* sb-vm::*control-stack-start*)))
+    (values
+     ;; FIXME: This is implemented the way it is because sometimes
+     ;; either of +all-spaces+ or +stack-spaces+ is undefined due to
+     ;; SBCL-internal magic -- aartaka
+     (- stack-total
+        (funcall (third (find :control-stack
+                              (ignore-errors
+                               (symbol-value
+                                (or (uiop:find-symbol* :+all-spaces+ :sb-vm nil)
+                                    (uiop:find-symbol* :+stack-spaces+ :sb-vm nil))))
+                              :key #'first))))
+     stack-total))
   #-(or ccl ecl sbcl)
   (values 0 0))
 
