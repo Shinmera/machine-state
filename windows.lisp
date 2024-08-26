@@ -13,6 +13,9 @@
   `(unless (cffi:foreign-funcall ,function ,@args)
      (fail (org.shirakumo.com-on:error-message))))
 
+(defun process ()
+  (cffi:foreign-funcall "GetCurrentProcess" :pointer))
+
 (cffi:defcstruct (io-counters :conc-name io-counters-)
   (reads :ullong)
   (writes :ullong)
@@ -24,7 +27,7 @@
 (define-implementation process-io-bytes ()
   (cffi:with-foreign-object (io-counters '(:struct io-counters))
     (windows-call "GetProcessIoCounters"
-                  :pointer (cffi:foreign-funcall "GetCurrentProcess" :pointer)
+                  :pointer (process)
                   :pointer io-counters
                   :bool)
     (+ (io-counters-read-bytes io-counters)
@@ -46,7 +49,7 @@
 (define-implementation process-room ()
   (cffi:with-foreign-objects ((memory-counters '(:struct memory-counters)))
     (windows-call "GetProcessMemoryInfo"
-                  :pointer (cffi:foreign-funcall "GetCurrentProcess" :pointer)
+                  :pointer (process)
                   :pointer memory-counters
                   :bool)
     (memory-counters-working-set-size memory-counters)))
@@ -57,7 +60,7 @@
                               (kernel-time :uint64)
                               (user-time :uint64))
     (windows-call "GetProcessTimes"
-                  :pointer (cffi:foreign-funcall "GetCurrentProcess" :pointer)
+                  :pointer (process)
                   :pointer creation-time
                   :pointer exit-time
                   :pointer kernel-time
@@ -154,3 +157,50 @@
                                    :uint64))
         (fail (org.shirakumo.com-on:error-message))
         mask)))
+
+(define-implementation process-priority ()
+  (let ((value (cffi:foreign-funcall "GetPriorityClass" :pointer (process))))
+    (case (cffi:foreign-funcall "GetPriorityClass" :pointer (process))
+      (#x00000000 (fail (org.shirakumo.com-on:error-message)))
+      (#x00000040 :idle)
+      (#x00004000 :low)
+      (#x00000020 :normal)
+      (#x00000080 :high)
+      (#x00000100 :realtime)
+      (T :normal))))
+
+(define-implementation (setf process-priority) (priority)
+  (windows-call "SetPriorityClass"
+                :pointer (process)
+                :uint16 (ecase priority
+                          (:idle     #x00000040)
+                          (:low      #x00004000)
+                          (:normal   #x00000020)
+                          (:high     #x00000080)
+                          (:realtime #x00000100))
+                :bool)
+  priority)
+
+(define-implementation thread-priority (thread)
+  (with-thread-handle (handle thread :normal)
+    (let ((value (cffi:foreign-funcall "GetThreadPriority" :pointer handle :uint)))
+      (when (= value 2147483647)
+        (fail (org.shirakumo.com-on:error-message)))
+      (cond ((< value -8) :idle)
+            ((< value  0) :low)
+            ((= value  0) :normal)
+            ((< value +8) :high)
+            (T            :realtime)))))
+
+(define-implementation (setf thread-priority) (thread priority)
+  (with-thread-handle (handle thread :normal)
+    (windows-call "SetThreadPriority"
+                  :pointer handle
+                  :int (ecase priority
+                         (:idle    -15)
+                         (:low      -1)
+                         (:normal    0)
+                         (:high      2)
+                         (:realtime 15))
+                  :bool)
+    priority))

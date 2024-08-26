@@ -83,6 +83,46 @@ If the function is unsupported a constant of all 1s is returned.
 When setting this place, the *actual* affinity mask of the thread is
 returned, which may differ from the one you tried to set.")
 
+  (function process-priority
+    "Accessor to the scheduler priority of the process.
+
+The priority can be one of the following values, in ascending order of
+importance:
+
+  :IDLE
+  :LOW
+  :NORMAL
+  :HIGH
+  :REALTIME
+
+If the function is unsupported :NORMAL is returned in all cases.
+
+When setting this place, the *actual* priority of the process is
+returned, which may differ from the one you tried to set.
+
+See THREAD-PRIORITY")
+
+  (function thread-priority
+    "Accessor to the scheduler priority of the thread.
+
+The priority can be one of the following values, in ascending order of
+importance:
+
+  :IDLE
+  :LOW
+  :NORMAL
+  :HIGH
+  :REALTIME
+
+Thread may be T for the current thread, or a BT:THREAD.
+
+If the function is unsupported :NORMAL is returned in all cases.
+
+When setting this place, the *actual* priority of the thread is
+returned, which may differ from the one you tried to set.
+
+See PROCESS-PRIORITY")
+
   (function gc-room
     "Returns the GC's memory usage statistics.
 

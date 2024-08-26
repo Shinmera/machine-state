@@ -45,6 +45,18 @@
 (define-protocol-fun (setf thread-core-mask) ((mask (unsigned-byte 64)) (thread T)) ((unsigned-byte 64))
   (thread-core-mask thread))
 
+(define-protocol-fun process-priority () ((member :idle :low :normal :high :realtime))
+  :normal)
+
+(define-protocol-fun thread-priority ((thread T)) ((member :idle :low :normal :high :realtime))
+  :normal)
+
+(define-protocol-fun (setf process-priority) ((priority (member :idle :low :normal :high :realtime))) ((member :idle :low :normal :high :realtime))
+  :normal)
+
+(define-protocol-fun (setf thread-priority) ((priority (member :idle :low :normal :high :realtime)) (thread T)) ((member :idle :low :normal :high :realtime))
+  :normal)
+
 (define-protocol-fun gc-room () ((unsigned-byte 64) (unsigned-byte 64))
   #+sbcl
   (values (- (sb-ext:dynamic-space-size) (sb-kernel:dynamic-usage))

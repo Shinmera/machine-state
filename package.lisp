@@ -9,6 +9,8 @@
    #:machine-cores
    #:thread-time
    #:thread-core-mask
+   #:process-priority
+   #:thread-priority
    #:gc-room
    #:gc-time
    #:gpu-room
