@@ -33,7 +33,7 @@
 
 (define-implementation (setf thread-core-mask) (mask-int thread)
   (with-thread-handle (handle thread (1- (ash 1 (machine-cores))))
-    (cffi:with-foreign-objects ((mask-ptr :uint64))
+    (cffi:with-foreign-objects ((mask :uint64))
       (setf (cffi:mem-ref mask :uint64) mask-int)
       (nxgl-call "nxgl_set_core_mask" :pointer handle :pointer mask)
       (cffi:mem-ref mask :uint64))))
