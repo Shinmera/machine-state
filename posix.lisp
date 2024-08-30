@@ -181,7 +181,7 @@
 
 (define-implementation storage-room (path)
   (cffi:with-foreign-objects ((statvfs '(:struct statvfs)))
-    (posix-call "statvfs" :string (uiop:native-namestring path) :pointer statvfs :int)
+    (posix-call "statvfs" :string (pathname-utils:native-namestring path) :pointer statvfs :int)
     (values (* (statvfs-bavail statvfs)
                (statvfs-bsize statvfs))
             (* (statvfs-blocks statvfs)

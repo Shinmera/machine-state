@@ -20,6 +20,7 @@
   :depends-on (:documentation-utils
                :cffi
                :bordeaux-threads
+               :pathname-utils
                (:feature :windows :com-on))
   :in-order-to ((asdf:test-op (asdf:test-op :machine-state-test))))
 

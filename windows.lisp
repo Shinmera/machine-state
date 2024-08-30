@@ -215,7 +215,8 @@
   (cffi:with-foreign-objects ((available-to-caller :int64)
                               (total :int64)
                               (available :int64))
-    (org.shirakumo.com-on:with-wstring (str (uiop:native-namestring path))
+    (org.shirakumo.com-on:with-wstring (str (pathname-utils:native-namestring
+                                             (pathname-utils:to-directory path)))
       (windows-call "GetDiskFreeSpaceExW"
                     :pointer str
                     :pointer available-to-caller
