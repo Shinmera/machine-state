@@ -151,6 +151,7 @@
         (posix-call0 "pthread_setschedparam" :pointer handle :int policy :pointer param :int)))
     priority))
 
+#-darwin
 (cffi:defcstruct (statvfs :size 112 :conc-name statvfs-)
   (bsize    :uint64 :offset  0)
   (frsize   :uint64 :offset  8)
@@ -163,6 +164,20 @@
   (fsid     :uint64 :offset 64)
   (flag     :uint64 :offset 72)
   (namemax  :uint64 :offset 80))
+
+#+darwin
+(cffi:defcstruct (statvfs :size 64 :conc-name statvfs-)
+  (bsize    :uint64 :offset  0)
+  (frsize   :uint64 :offset  8)
+  (blocks   :uint32 :offset 16)
+  (bfree    :uint32 :offset 20)
+  (bavail   :uint32 :offset 24)
+  (files    :uint32 :offset 28)
+  (ffree    :uint32 :offset 32)
+  (favail   :uint32 :offset 36)
+  (fsid     :uint64 :offset 40)
+  (flag     :uint64 :offset 48)
+  (namemax  :uint64 :offset 56))
 
 (define-implementation storage-room (path)
   (cffi:with-foreign-objects ((statvfs '(:struct statvfs)))
