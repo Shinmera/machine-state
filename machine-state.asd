@@ -16,10 +16,10 @@
                (:file "nx" :if-feature :nx)
                (:file "mezzano" :if-feature :mezzano)
                (:file "documentation"))
+  :defsystem-depends-on (:trivial-features)
   :depends-on (:documentation-utils
                :cffi
                :bordeaux-threads
-               :trivial-features
                (:feature :windows :com-on))
   :in-order-to ((asdf:test-op (asdf:test-op :machine-state-test))))
 
