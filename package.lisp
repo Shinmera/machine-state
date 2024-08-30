@@ -16,4 +16,5 @@
    #:gpu-room
    #:gpu-time
    #:static-room
-   #:stack-room))
+   #:stack-room
+   #:storage-room))

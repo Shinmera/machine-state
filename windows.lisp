@@ -13,6 +13,12 @@
   `(unless (cffi:foreign-funcall ,function ,@args)
      (fail (org.shirakumo.com-on:error-message))))
 
+(defmacro nt-call (function &rest args)
+  `(let ((value (cffi:foreign-funcall ,function ,@args)))
+     (unless (= 0 value)
+       (fail (org.shirakumo.com-on:error-message
+              (cffi:foreign-funcall "LsaNtStatusToWinError" :uint32 value :ulong))))))
+
 (defun process ()
   (cffi:foreign-funcall "GetCurrentProcess" :pointer))
 
@@ -204,3 +210,74 @@
                          (:realtime 15))
                   :bool)
     priority))
+
+(cffi:defcstruct (io-status :conc-name io-status-)
+  (status :pointer)
+  (information :pointer))
+
+(cffi:defcstruct (fs-info :conc-name fs-info-)
+  (total-units :int64)
+  (caller-available-units :int64)
+  (actual-available-units :int64)
+  (sectors-per-unit :ulong)
+  (bytes-per-sector :ulong))
+
+(cffi:defcstruct (obj-attrs :conc-name obj-attrs-)
+  (length :ulong)
+  (root-directory :pointer)
+  (name :pointer)
+  (attributes :ulong)
+  (security-descriptor :pointer)
+  (security-quality-of-service :pointer))
+
+(cffi:defcstruct (counted-str :conc-name counted-str-)
+  (length :ushort)
+  (max-length :ushort)
+  (pointer :string))
+
+(define-implementation storage-room (path)
+  (cffi:with-foreign-objects ((handle :pointer)
+                              (str :int16 1024)
+                              (counted-str '(:struct counted-str))
+                              (obj-attrs '(:struct obj-attrs))
+                              (io-status '(:struct io-status))
+                              (fs-info '(:struct fs-info)))
+    (setf (obj-attrs-length obj-attrs) (cffi:foreign-type-size '(:struct obj-attrs)))
+    (setf (obj-attrs-root-directory obj-attrs) (cffi:null-pointer))
+    (setf (obj-attrs-name obj-attrs) counted-str)
+    (setf (obj-attrs-attributes obj-attrs) (logior #x100 #x200)) ; OBJ_OPENLINK, OBJ_KERNEL_HANDLE
+    (setf (obj-attrs-security-descriptor obj-attrs) (cffi:null-pointer))
+    (setf (obj-attrs-security-quality-of-service obj-attrs) (cffi:null-pointer))
+    (setf (counted-str-length counted-str) 0)
+    (setf (counted-str-max-length counted-str) (* 2 1024))
+    (setf (counted-str-pointer counted-str) str)
+    (org.shirakumo.com-on:with-wstring (path (uiop:native-namestring path))
+      (nt-call "RtlDosPathNameToNtPathName_U_WithStatus"
+               :pointer path
+               :pointer counted-str
+               :pointer (cffi:null-pointer)
+               :pointer (cffi:null-pointer)
+               :uint32))
+    (nt-call "NtOpenFile"
+             :pointer handle
+             :ulong 0
+             :pointer obj-attrs
+             :pointer io-status
+             :ulong 7
+             :ulong 0
+             :uint32)
+    (let ((handle (cffi:mem-ref handle :pointer)))
+      (unwind-protect
+           (progn
+             (nt-call "NtQueryVolumeInformationFile"
+                      :pointer handle
+                      :pointer io-status
+                      :pointer fs-info
+                      :ulong (cffi:foreign-type-size '(:struct fs-info))
+                      :int 7
+                      :uint32)
+             (let ((mult (* (fs-info-bytes-per-sector fs-info)
+                            (fs-info-sectors-per-unit fs-info))))
+               (values (* mult (fs-info-actual-available-units fs-info))
+                       (* mult (fs-info-total-units fs-info)))))
+        (cffi:foreign-funcall "NtClose" :pointer handle)))))

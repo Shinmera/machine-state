@@ -36,8 +36,12 @@ Returns the number of bytes occupied.
 
 If the function is unsupported a constant 0 is returned.
 
+See MACHINE-ROOM
 See GC-ROOM
-See MACHINE-ROOM")
+See GPU-ROOM
+See STATIC-ROOM
+See STACK-ROOM
+See STORAGE-ROOM")
   
   (function machine-room
     "Returns the machine's primary memory usage statistics.
@@ -49,9 +53,12 @@ Returns two values:
 If the function is unsupported a constant 0 is returned for both
 values.
 
+See PROCESS-ROOM
 See GC-ROOM
 See GPU-ROOM
-See PROCESS-ROOM")
+See STATIC-ROOM
+See STACK-ROOM
+See STORAGE-ROOM")
 
   (function machine-cores
     "Returns the number of cores available on the machine.")
@@ -139,7 +146,8 @@ See MACHINE-ROOM
 See PROCESS-ROOM
 See GPU-ROOM
 See STATIC-ROOM
-See STACK-ROOM")
+See STACK-ROOM
+See STORAGE-ROOM")
   
   (function gc-time
     "Returns the amount of processing time spent in the GC.
@@ -168,7 +176,8 @@ See MACHINE-ROOM
 See PROCESS-ROOM
 See GC-ROOM
 See STATIC-ROOM
-See STACK-ROOM")
+See STACK-ROOM
+See STORAGE-ROOM")
   
   (function gpu-time
     "Returns the amount of processing time spent on the GPU by this process.
@@ -192,7 +201,8 @@ See MACHINE-ROOM
 See PROCESS-ROOM
 See GC-ROOM
 See GPU-ROOM
-See STACK-ROOM")
+See STACK-ROOM
+See STORAGE-ROOM")
   
   (function stack-room
     "Return the stack usage statistics.
@@ -205,4 +215,21 @@ See MACHINE-ROOM
 See PROCESS-ROOM
 See GC-ROOM
 See GPU-ROOM
-See STATIC-ROOM"))
+See STATIC-ROOM
+See STACK-ROOM
+See STORAGE-ROOM")
+
+  (function storage-room
+    "Return file system storage usage statistics.
+
+Returns two values:
+  The number of free bytes
+  The total number of bytes available
+
+See MACHINE-ROOM
+See PROCESS-ROOM
+See GC-ROOM
+See GPU-ROOM
+See STATIC-ROOM
+See STACK-ROOM
+See STORAGE-ROOM"))

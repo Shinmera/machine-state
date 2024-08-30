@@ -151,3 +151,7 @@
                         :key #'first)))
   #+(or ccl clisp sbcl)
   0)
+
+(define-protocol-fun storage-room ((path (or string pathname))) ((unsigned-byte 64) (unsigned-byte 64))
+  (declare (ignore path))
+  (values 0 0))
