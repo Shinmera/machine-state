@@ -18,7 +18,7 @@
                (:file "documentation"))
   :defsystem-depends-on (:trivial-features)
   :depends-on (:documentation-utils
-               :cffi
+               (:feature (:not :mezzano) :cffi)
                :bordeaux-threads
                :pathname-utils
                (:feature :windows :com-on))
