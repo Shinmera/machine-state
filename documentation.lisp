@@ -61,7 +61,12 @@ See STACK-ROOM
 See STORAGE-ROOM")
 
   (function machine-cores
-    "Returns the number of cores available on the machine.")
+    "Returns the number of cores available on the machine.
+
+See THREAD-CORE-MASK")
+
+  (function machine-uptime
+    "Returns the number of seconds since the machine was started up.")
   
   (function thread-time
     "Returns the amount of processing time spent by this thread in seconds.
@@ -88,7 +93,9 @@ Thread may be T for the current thread, or a BT:THREAD.
 If the function is unsupported a constant of all 1s is returned.
 
 When setting this place, the *actual* affinity mask of the thread is
-returned, which may differ from the one you tried to set.")
+returned, which may differ from the one you tried to set.
+
+See MACHINE-CORES")
 
   (function process-priority
     "Accessor to the scheduler priority of the process.

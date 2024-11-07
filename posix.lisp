@@ -76,6 +76,11 @@
   ;; _SC_NPROCESSORS_ONLN 84
   (posix-call "sysconf" :int 84 :long))
 
+(define-implementation machine-uptime ()
+  (cffi:with-foreign-objects ((sysinfo '(:struct sysinfo)))
+    (posix-call "sysinfo" :pointer sysinfo :int)
+    (sysinfo-uptime sysinfo)))
+
 (defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
   `(if (or (eql ,thread T)
            (eql ,thread (bt:current-thread)))

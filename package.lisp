@@ -7,6 +7,7 @@
    #:process-time
    #:machine-room
    #:machine-cores
+   #:machine-uptime
    #:thread-time
    #:thread-core-mask
    #:process-priority

@@ -112,6 +112,12 @@
                           :void)
     (system-info-number-of-processors system-info)))
 
+(define-implementation machine-uptime ()
+  (cffi:with-foreign-objects ((time :long-long)
+                              (freq :long-long))
+    (windows-call "QueryUnbiasedInterruptTime" :pointer time :bool)
+    (values (round (cffi:mem-ref time :long-long) 10000000))))
+
 (defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
   `(if (or (eql ,thread T)
            (eql ,thread (bt:current-thread)))
