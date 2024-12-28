@@ -46,4 +46,4 @@
           (T
            (setf +gpu-time-query-object+ (first (gl:gen-queries 1)))))
     (gl:begin-query :time-elapsed +gpu-time-query-object+)
-    (* (float +gpu-time+ 0d0) 10e-9)))
+    (* (float +gpu-time+ 0d0) 1e-9)))
