@@ -14,7 +14,7 @@
        ,@body)))
 
 (define-implementation process-io-bytes ()
-  (with-proc ("/proc/self/io" (read "read_bytes: ") (write "write_bytes: "))
+  (with-proc ("/proc/self/io" (read "rchar: ") (write "wchar: "))
     (+ read write)))
 
 ;;;; For whatever reason on Linux rusage is useless for this, so redefine it here.
