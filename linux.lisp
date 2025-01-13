@@ -10,7 +10,7 @@
      (let ,(loop for (var field) in fields
                  collect `(,var (let* ((start (cffi:foreign-funcall "strstr" :pointer io :string ,field :pointer))
                                        (ptr (cffi:inc-pointer start ,(length field))))
-                                  (cffi:foreign-funcall "atoi" :pointer ptr :int))))
+                                  (cffi:foreign-funcall "atol" :pointer ptr :long))))
        ,@body)))
 
 (define-implementation process-io-bytes ()
