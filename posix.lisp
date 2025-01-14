@@ -65,6 +65,7 @@
   (memory-unit :uint)
   (_pad :char :count 22))
 
+#-darwin
 (define-implementation machine-room ()
   (cffi:with-foreign-objects ((sysinfo '(:struct sysinfo)))
     (posix-call "sysinfo" :pointer sysinfo :int)
@@ -72,14 +73,15 @@
           (free (sysinfo-free-ram sysinfo)))
       (values (- total free) total))))
 
-(define-implementation machine-cores ()
-  ;; _SC_NPROCESSORS_ONLN 84
-  (posix-call "sysconf" :int 84 :long))
-
+#-darwin
 (define-implementation machine-uptime ()
   (cffi:with-foreign-objects ((sysinfo '(:struct sysinfo)))
     (posix-call "sysinfo" :pointer sysinfo :int)
     (sysinfo-uptime sysinfo)))
+
+(define-implementation machine-cores ()
+  ;; _SC_NPROCESSORS_ONLN 84
+  (posix-call "sysconf" :int 84 :long))
 
 (defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
   `(if (or (eql ,thread T)

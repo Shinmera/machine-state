@@ -12,6 +12,7 @@
                (:file "protocol")
                (:file "windows" :if-feature (:or :windows :win32))
                (:file "posix" :if-feature (:or :posix :linux :darwin :bsd))
+               (:file "darwin" :if-feature :darwin)
                (:file "linux" :if-feature :linux)
                (:file "nx" :if-feature :nx)
                (:file "mezzano" :if-feature :mezzano)
