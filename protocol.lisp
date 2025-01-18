@@ -6,6 +6,9 @@
   (:report (lambda (c s) (format s "The machine state query~@[ for ~a~] failed~@[:~%~%  ~a~]"
                                  (slot-value c 'function) (slot-value c 'message)))))
 
+(defun fail (&optional message)
+  (error 'query-failed :message message))
+
 (defmacro define-protocol-fun (name args vals &body default)
   `(progn
      (declaim (ftype (function ,(mapcar #'second args) (values ,@vals &optional)) ,name))
