@@ -3,10 +3,10 @@
 (defmacro sysctl (prop type &body body)
   `(cffi:with-foreign-objects ((ret ',type)
                                (size :size))
-     (setf (cffi:mem-ref size :size) (cffi:foreign-type-size :int64))
+     (setf (cffi:mem-ref size :size) (cffi:foreign-type-size ',type))
      (let ((status (cffi:foreign-funcall "sysctlbyname" :string ,prop :pointer ret :pointer size :pointer (cffi:null-pointer) :size 0 :int)))
        (cond ((/= 0 status)
-              (fail (cffi:foreign-funcall "strerror" :int64 status)))
+              (fail (cffi:foreign-funcall "strerror" :int64 status :string)))
              (T ,@body)))))
 
 (cffi:defcstruct (vm-statistics :conc-name vm-statistics-)
@@ -58,3 +58,6 @@
     (- (- (get-universal-time)
           (encode-universal-time 0 0 0 1 1 1970 0))
        (timeval-sec ret))))
+
+(define-implementation machine-cores ()
+  (sysctl "hw.ncpu" :uint (cffi:mem-ref ret :uint)))

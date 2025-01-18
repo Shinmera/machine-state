@@ -79,6 +79,7 @@
     (posix-call "sysinfo" :pointer sysinfo :int)
     (sysinfo-uptime sysinfo)))
 
+#-darwin
 (define-implementation machine-cores ()
   ;; _SC_NPROCESSORS_ONLN 84
   (posix-call "sysconf" :int 84 :long))
