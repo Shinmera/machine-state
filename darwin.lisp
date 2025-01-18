@@ -38,7 +38,9 @@
 (define-implementation machine-room ()
   (cffi:with-foreign-objects ((stats '(:struct vm-statistics))
                               (count :uint))
-    (setf (cffi:mem-ref count :uint) 1)
+    (setf (cffi:mem-ref count :uint)
+          (/ (cffi:foreign-type-size '(:struct vm-statistics))
+             (cffi:foreign-type-size :int32)))
     (cond ((/= 0 (cffi:foreign-funcall "host_statistics64"
                                        :size (cffi:foreign-funcall "mach_host_self" :size)
                                        :int 4 ; HOST_VM_INFO64
@@ -47,8 +49,7 @@
                                        :int))
            (fail "Failed to retrieve host statistics"))
           (T
-           (let* ((free-pages (- (vm-statistics-free-count stats)
-                                 (vm-statistics-speculative-count stats)))
+           (let* ((free-pages (vm-statistics-free-count stats))
                   (free (* (cffi:foreign-funcall "getpagesize" :int) free-pages))
                   (total (sysctl "hw.memsize" :int64 (cffi:mem-ref ret :int64))))
              (values (- total free) total))))))
