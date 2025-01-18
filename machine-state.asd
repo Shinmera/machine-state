@@ -23,7 +23,7 @@
                :bordeaux-threads
                :pathname-utils
                (:feature :windows :com-on))
-  :in-order-to ((asdf:test-op (asdf:test-op :machine-state-test))))
+  :in-order-to ((asdf:test-op (asdf:test-op :machine-state/test))))
 
 (asdf:defsystem machine-state/opengl
   :version "1.0.0"
@@ -33,3 +33,13 @@
   :description "Additions for GPU state information using OpenGL"
   :components ((:file "opengl"))
   :depends-on (:machine-state :cl-opengl))
+
+(asdf:defsystem machine-state/test
+  :version "1.0.0"
+  :license "zlib"
+  :author "Yukari Hafner <shinmera@tymoon.eu>"
+  :maintainer "Yukari Hafner <shinmera@tymoon.eu>"
+  :description "Tests for the machine-state library"
+  :components ((:file "test"))
+  :depends-on (:machine-state :parachute)
+  :perform (asdf:test-op (op c) (uiop:symbol-call :parachute :test :org.shirakumo.machine-state.test)))

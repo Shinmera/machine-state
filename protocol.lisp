@@ -122,18 +122,19 @@
   #+ecl
   (values 0 (ext:get-limit 'ext:lisp-stack))
   #+sbcl
-  (let ((stack-total (- sb-vm::*control-stack-end* sb-vm::*control-stack-start*)))
+  (let* ((stack-total (- sb-vm::*control-stack-end* sb-vm::*control-stack-start*))
+         (spaces (ignore-errors
+                  (symbol-value
+                   (or (uiop:find-symbol* :+all-spaces+ :sb-vm nil)
+                       (uiop:find-symbol* :+stack-spaces+ :sb-vm nil))))))
     (values
      ;; FIXME: This is implemented the way it is because sometimes
      ;; either of +all-spaces+ or +stack-spaces+ is undefined due to
      ;; SBCL-internal magic -- aartaka
      (- stack-total
-        (funcall (third (find :control-stack
-                              (ignore-errors
-                               (symbol-value
-                                (or (uiop:find-symbol* :+all-spaces+ :sb-vm nil)
-                                    (uiop:find-symbol* :+stack-spaces+ :sb-vm nil))))
-                              :key #'first))))
+        (if spaces
+            (funcall (third (find :control-stack spaces :key #'first)))
+            stack-total))
      stack-total))
   #-(or ccl ecl sbcl)
   (values 0 0))
@@ -147,11 +148,10 @@
   #+clisp
   (nth-value 2 (sys::%room))
   #+sbcl
-  (funcall (third (find :static
-                        (ignore-errors
-                         (symbol-value
-                          (uiop:find-symbol* :+all-spaces+ :sb-vm nil)))
-                        :key #'first)))
+  (let ((spaces (ignore-errors (symbol-value (uiop:find-symbol* :+all-spaces+ :sb-vm nil)))))
+    (if spaces
+        (funcall (third (find :static spaces :key #'first)))
+        0))
   #+(or ccl clisp sbcl)
   0)
 

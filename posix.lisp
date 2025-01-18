@@ -87,6 +87,7 @@
   `(if (or (eql ,thread T)
            (eql ,thread (bt:current-thread)))
        (let ((,handle (cffi:foreign-funcall "pthread_self" :pointer)))
+         (declare (ignorable ,handle))
          ,@body)
        ,default))
 
