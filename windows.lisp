@@ -72,8 +72,7 @@
                   :pointer kernel-time
                   :pointer user-time
                   :bool)
-    (* (float (cffi:mem-ref user-time :uint64) 0d0)
-       10d-9)))
+    (convert-file-time (cffi:mem-ref user-time :uint64))))
 
 (cffi:defcstruct (memory-status :conc-name memory-status-)
   (length :uint32)
@@ -118,6 +117,29 @@
     (windows-call "QueryUnbiasedInterruptTime" :pointer time :bool)
     (values (round (cffi:mem-ref time :long-long) 10000000))))
 
+(declaim (inline convert-file-time))
+(defun convert-file-time (time)
+  (* 10d-9 (float time 0d0)))
+
+(define-implementation machine-time (core)
+  (etypecase core
+    ((eql T)
+     (cffi:with-foreign-objects ((idle-time :uint64)
+                                 (kernel-time :uint64)
+                                 (user-time :uint64))
+       (windows-call "GetSystemTimes"
+                     :pointer idle-time
+                     :pointer kernel-time
+                     :pointer user-time
+                     :bool)
+       (values (convert-file-time (cffi:mem-ref idle-time :uint64))
+               (convert-file-time (+ (cffi:mem-ref kernel-time :uint64)
+                                     (cffi:mem-ref idle-time :uint64)
+                                     (cffi:mem-ref user-time :uint64))))))
+    (integer
+     ;; TODO: this
+     )))
+
 (defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
   `(if (or (eql ,thread T)
            (eql ,thread (bt:current-thread)))
@@ -138,8 +160,7 @@
                     :pointer kernel-time
                     :pointer user-time
                     :bool)
-      (* (float (cffi:mem-ref user-time :uint64) 0d0)
-         10d-9))))
+      (convert-file-time (cffi:mem-ref user-time :uint64)))))
 
 (cffi:defcstruct (thread-info :conc-name thread-info-)
   (exit-status :uint32)
