@@ -8,8 +8,9 @@
        (cffi:foreign-funcall "fread" :pointer io :size 1 :size 2048 :pointer file :size)
        (cffi:foreign-funcall "fclose" :pointer file :void))
      (let ,(loop for (var field) in fields
-                 collect `(,var (let* ((start (cffi:foreign-funcall "strstr" :pointer io :string ,field :pointer))
-                                       (ptr (cffi:inc-pointer start ,(length field))))
+                 collect `(,var (let* ((field ,field)
+                                       (start (cffi:foreign-funcall "strstr" :pointer io :string field :pointer))
+                                       (ptr (cffi:inc-pointer start (length field))))
                                   (cffi:foreign-funcall "atol" :pointer ptr :long))))
        ,@body)))
 
@@ -21,3 +22,14 @@
 (define-implementation process-room ()
   (with-proc ("/proc/self/smaps_rollup" (rss "Rss: "))
     (* 1024 rss)))
+
+(define-implementation machine-time (core)
+  (let ((scale (/ (float (posix-call "sysconf" :int 2 :long) 0d0))))
+    (flet ((conv (x) (* x scale)))
+      (etypecase core
+        ((eql T)
+         (with-proc ("/proc/stat" (user "cpu  ") (nice " ") (system " ") (idle " "))
+           (values (conv idle) (conv (+ user nice system idle)))))
+        (integer
+         (with-proc ("/proc/stat" (user (format NIL "cpu~d " core)) (nice " ") (system " ") (idle " "))
+           (values (conv idle) (conv (+ user nice system idle)))))))))

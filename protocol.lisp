@@ -42,6 +42,9 @@
 (define-protocol-fun machine-uptime () ((unsigned-byte 64))
   0)
 
+(define-protocol-fun machine-time ((core T)) (double-float double-float)
+  (values 0d0 0d0))
+
 (define-protocol-fun thread-time ((thread T)) (double-float)
   0d0)
 

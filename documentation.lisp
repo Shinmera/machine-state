@@ -63,10 +63,22 @@ See STORAGE-ROOM")
   (function machine-cores
     "Returns the number of cores available on the machine.
 
-See THREAD-CORE-MASK")
+See THREAD-CORE-MASK
+See MACHINE-TIME")
 
   (function machine-uptime
     "Returns the number of seconds since the machine was started up.")
+
+  (function machine-time
+    "Returns the amount of time spent processing.
+
+Core may be T for an aggregate of all cores, or an integer of the core number.
+
+Returns two values:
+  The time spent idle in seconds
+  The total time spent in seconds
+
+See MACHINE-CORES")
   
   (function thread-time
     "Returns the amount of processing time spent by this thread in seconds.
