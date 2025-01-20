@@ -1,5 +1,7 @@
 (defpackage #:org.shirakumo.machine-state
   (:use #:cl)
+  #+windows
+  (:local-nicknames (#:com #:org.shirakumo.com-on))
   (:export
    #:query-failed
    #:process-io-bytes

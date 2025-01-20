@@ -6,8 +6,8 @@
   (:report (lambda (c s) (format s "The machine state query~@[ for ~a~] failed~@[:~%~%  ~a~]"
                                  (slot-value c 'function) (slot-value c 'message)))))
 
-(defun fail (&optional message)
-  (error 'query-failed :message message))
+(defun fail (&optional message function)
+  (error 'query-failed :function function :message message))
 
 (defmacro define-protocol-fun (name args vals &body default)
   `(progn
@@ -19,8 +19,8 @@
 
 (defmacro define-implementation (fun args &body body)
   `(defun ,fun ,args
-     (flet ((fail (&optional message)
-              (error 'query-failed :function ',fun :message message)))
+     (flet ((fail (&optional message (function ',fun))
+              (error 'query-failed :function function :message message)))
        (declare (ignorable #'fail))
        ,@body)))
 

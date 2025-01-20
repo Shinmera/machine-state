@@ -6,6 +6,9 @@
 (cffi:define-foreign-library ntdll
   (:windows "Ntdll.dll"))
 
+(cffi:define-foreign-library pdh
+  (:windows "Pdh.dll"))
+
 (cffi:use-foreign-library psapi)
 (cffi:use-foreign-library ntdll)
 
@@ -18,6 +21,15 @@
      (unless (= 0 value)
        (fail (org.shirakumo.com-on:error-message
               (cffi:foreign-funcall "LsaNtStatusToWinError" :uint32 value :ulong))))))
+
+(defmacro pdh-call (&rest args)
+  `(let ((ret (cffi:foreign-funcall ,@args :size)))
+     (unless (= 0 ret)
+       (let ((msg (com:error-message ret 'pdh)))
+         (fail (if (string/= "" msg) 
+                   msg
+                   (format NIL "Performance counter call failed with ~d" ret))
+               'machine-time)))))
 
 (defun process ()
   (cffi:foreign-funcall "GetCurrentProcess" :pointer))
@@ -137,8 +149,41 @@
                                      (cffi:mem-ref idle-time :uint64)
                                      (cffi:mem-ref user-time :uint64))))))
     (integer
-     ;; TODO: this
-     )))
+     (unless (cffi:foreign-library-loaded-p 'pdh)
+       (cffi:load-foreign-library 'pdh))
+     (cffi:with-foreign-objects ((handle :pointer)
+                                 (counters :pointer 3)
+                                 (type :uint32)
+                                 (data :double))
+       (pdh-call "PdhOpenQueryW"
+                 :pointer (cffi:null-pointer)
+                 :pointer (cffi:null-pointer)
+                 :pointer handle)
+       (let ((handle (cffi:mem-ref handle :pointer)))
+         (unwind-protect
+              (progn
+                (flet ((add-counter (i name)
+                         (pdh-call "PdhAddCounterW"
+                                   :pointer handle
+                                   com:wstring name
+                                   :pointer (cffi:null-pointer)
+                                   :pointer (cffi:mem-aptr counters :pointer i))))
+                  (add-counter 0 (format NIL "\\Processor(~d)\\% Processor Time" core))
+                  (add-counter 1 (format NIL "\\Processor(~d)\\% Idle Time" core))
+                  (add-counter 2 (format NIL "\\Processor(~d)\\% Privileged Time" core)))
+                (pdh-call "PdhCollectQueryData" :pointer handle)
+                (flet ((get-counter (i)
+                         (pdh-call "PdhGetFormattedCounterValue"
+                                   :pointer (cffi:mem-aptr counters :pointer i)
+                                   :uint32 #x00000200 #|PDH_FMT_DOUBLE|#
+                                   :pointer type
+                                   :pointer data)
+                         (cffi:mem-ref data :double)))
+                  (let ((proc (get-counter 0))
+                        (idle (get-counter 1))
+                        (priv (get-counter 2)))
+                    (values idle (+ proc idle priv)))))
+           (cffi:foreign-funcall "PdhCloseQuery" :pointer handle)))))))
 
 (defmacro with-thread-handle ((handle thread &optional (default 0)) &body body)
   `(if (or (eql ,thread T)
