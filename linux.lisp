@@ -14,6 +14,20 @@
                                   (cffi:foreign-funcall "atol" :pointer ptr :long))))
        ,@body)))
 
+(defmacro do-proc (file fgetsspec vars finally &body body)
+  `(cffi:with-foreign-objects ((io :char 2048)
+                               ,@vars)
+     (let ((file (cffi:foreign-funcall "fopen" :string ,file :string "rb" :pointer)))
+       (when (cffi:null-pointer-p file)
+         (fail (cffi:foreign-funcall "strerror" :int64 errno)))
+       (prog1 (loop while (/= 0 (cffi:foreign-funcall "fgets" :pointer io :size 2048 :pointer file :int))
+                    do (when (= ,(length vars) (cffi:foreign-funcall "sscanf" :pointer io :string ,fgetsspec
+                                                                              ,@(loop for (name) in vars collect :pointer collect name)
+                                                                              :int))
+                         ,@body)
+                    finally (progn ,finally))
+         (cffi:foreign-funcall "fclose" :pointer file :void)))))
+
 (define-implementation process-io-bytes ()
   (with-proc ("/proc/self/io" (read "rchar: ") (write "wchar: "))
     (+ read write)))
@@ -33,3 +47,56 @@
         (integer
          (with-proc ("/proc/stat" (user (format NIL "cpu~d " core)) (nice " ") (system " ") (idle " "))
            (values (conv idle) (conv (+ user nice system idle)))))))))
+
+(define-implementation storage-device (path)
+  NIL)
+
+(define-implementation storage-io-bytes (device)
+  (when (pathnamep device)
+    (setf device (storage-device device)))
+  (cffi:with-foreign-objects ((lasttop :char 32))
+    (setf (cffi:mem-aref lasttop :char 0) 1)
+    (let ((count 0))
+      (etypecase device
+        ((eql T)
+         (do-proc "/proc/diskstats" "%*d %*d %31s %*u %*u %llu %*u %*u %*u %llu"
+             ((name :char 32)
+              (reads :unsigned-long-long)
+              (writes :unsigned-long-long))
+           (when (/= 0 (cffi:foreign-funcall "strncmp" :pointer lasttop :pointer name :size (cffi:foreign-funcall "strlen" :pointer lasttop :size) :int))
+             (cffi:foreign-funcall "strncpy" :pointer lasttop :pointer name :size 32)
+             (incf count (+ (cffi:mem-ref reads :unsigned-long-long)
+                            (cffi:mem-ref writes :unsigned-long-long))))))
+        (string
+         (do-proc "/proc/diskstats" "%*d %*d %31s %*u %*u %llu %*u %*u %*u %llu"
+             ((name :char 32)
+              (reads :unsigned-long-long)
+              (writes :unsigned-long-long))
+           (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size 32 :int))
+             (incf count (+ (cffi:mem-ref reads :unsigned-long-long)
+                            (cffi:mem-ref writes :unsigned-long-long)))
+             (return)))))
+      ;; Sector size is 512 bytes.
+      (* 512 count))))
+
+(define-implementation network-io-bytes (device)
+  (etypecase device
+    ((eql T)
+     (let ((count 0))
+       (do-proc "/proc/net/dev" "%31s %llu %*u %*u %*u %*u %*u %*u %*u %llu %*u"
+           ((name :char 32)
+            (reads :unsigned-long-long)
+            (writes :unsigned-long-long))
+           (return count)
+         (unless (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string "lo:" :size 32 :int))
+           (incf count (+ (cffi:mem-ref reads :unsigned-long-long)
+                          (cffi:mem-ref writes :unsigned-long-long)))))))
+    (string
+     (do-proc "/proc/net/dev" "%31s %llu %*u %*u %*u %*u %*u %*u %*u %llu %*u"
+         ((name :char 32)
+          (reads :unsigned-long-long)
+          (writes :unsigned-long-long))
+         (fail "No such device.")
+       (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size (1- (length device)) :int))
+         (return (+ (cffi:mem-ref reads :unsigned-long-long)
+                    (cffi:mem-ref writes :unsigned-long-long))))))))
