@@ -22,8 +22,8 @@
          (fail (cffi:foreign-funcall "strerror" :int64 errno)))
        (prog1 (loop while (/= 0 (cffi:foreign-funcall "fgets" :pointer io :size 2048 :pointer file :int))
                     do (when (= ,(length vars) (cffi:foreign-funcall "sscanf" :pointer io :string ,fgetsspec
-                                                                              ,@(loop for (name) in vars collect :pointer collect name)
-                                                                              :int))
+                                                                     ,@(loop for (name) in vars collect :pointer collect name)
+                                                                     :int))
                          ,@body)
                     finally (progn ,finally))
          (cffi:foreign-funcall "fclose" :pointer file :void)))))
@@ -48,8 +48,20 @@
          (with-proc ("/proc/stat" (user (format NIL "cpu~d " core)) (nice " ") (system " ") (idle " "))
            (values (conv idle) (conv (+ user nice system idle)))))))))
 
+(cffi:defcstruct (stat :size 144 :conc-name stat-)
+  (dev     :uint64 :offset  0))
+
 (define-implementation storage-device (path)
-  NIL)
+  (cffi:with-foreign-objects ((stat '(:struct stat)))
+    (when (< (cffi:foreign-funcall "stat" :string (pathname-utils:native-namestring path) :pointer stat :int) 0)
+      (fail (cffi:foreign-funcall "strerror" :int64 errno)))
+    (let ((dev (stat-dev stat)))
+      (do-proc "/proc/self/mountinfo" "%*d %*d %d:%d / %*s %*s %*s - %*s /dev/%s"
+          ((l :int) (r :int) (name :char 32))
+          (fail "Device not found in mountinfo table")
+        (when (and (= (cffi:mem-ref l :int) (ldb (byte 32 8) dev))
+                   (= (cffi:mem-ref r :int) (1- (ldb (byte 8 0) dev))))
+          (return (cffi:foreign-string-to-lisp name :max-chars 32)))))))
 
 (define-implementation storage-io-bytes (device)
   (when (pathnamep device)
