@@ -2,7 +2,37 @@
 This library implements various functions to access status information about the machine, process, etc.
 
 ## How To
-Since this is a toolkit library, please simply refer to the symbol index for available functions and their behaviour.
+Since this is a toolkit library, please simply refer to the symbol index for available functions and their behaviour. The following groups of functions are available:
+
+- Process
+  - ``process-io-bytes``
+  - ``process-room``
+  - ``process-time``
+  - ``process-priority``
+- Threads
+  - ``thread-time``
+  - ``thread-core-mask``
+  - ``thread-priority``
+- Implementation
+  - ``gc-room``
+  - ``gc-time``
+  - ``static-room``
+  - ``stack-room``
+- GPU
+  - ``gpu-room``
+  - ``gpu-time``
+- Physical Machine
+  - ``machine-room``
+  - ``machine-cores``
+  - ``machine-uptime``
+  - ``machine-time``
+- Storage Devices
+  - ``storage-device``
+  - ``storage-device-path``
+  - ``storage-room``
+  - ``storage-io-bytes``
+- Network Devices
+  - ``network-io-bytes``
 
 ## Implementation Support
 Fetching information about threads that aren't the current one, or GC related information requires implementation support. The following implementations are fully or partially supported:
@@ -12,3 +42,12 @@ Fetching information about threads that aren't the current one, or GC related in
 - ECL
 - SBCL
 - Mezzano
+
+## Operating System Support
+Fetching information about various hardware devices is, of course, OS dependent. The following systems are fully or partially supported:
+
+- BSDs (POSIX)
+- Linux
+- MacOS (darwin)
+- Mezzano
+- Windows
