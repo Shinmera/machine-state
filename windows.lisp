@@ -286,9 +286,13 @@
     priority))
 
 (define-implementation storage-device (path)
-  (if (pathnamep path)
-      (pathname-device (merge-pathnames path))
-      (storage-device (pathname-utils:parse-native-namestring path))))
+  (etypecase path
+    (pathname (or (pathname-device path)
+                  (pathname-device *default-pathname-defaults*)
+                  "C"))
+    (string (or (pathname-device (pathname-utils:parse-native-namestring path))
+                (pathname-device *default-pathname-defaults*)
+                "C"))))
 
 (define-implementation storage-device-path (device)
   (make-pathname :device device :directory '(:absolute)))

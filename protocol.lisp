@@ -165,8 +165,8 @@
   (declare (ignore path))
   (fail "Not implemented."))
 
-(define-protocol-fun storage-device-path ((device string)) (string)
-  (declare (ignore path))
+(define-protocol-fun storage-device-path ((device string)) (pathname)
+  (declare (ignore device))
   (fail "Not implemented."))
 
 (define-protocol-fun storage-room ((path (or string pathname))) ((unsigned-byte 64) (unsigned-byte 64))
