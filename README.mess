@@ -32,6 +32,7 @@ Since this is a toolkit library, please simply refer to the symbol index for ava
   - ``storage-room``
   - ``storage-io-bytes``
 - Network Devices
+  - ``network-devices``
   - ``network-io-bytes``
 
 ## Implementation Support

@@ -126,6 +126,12 @@
                            (* 512 (cffi:mem-ref reads :unsigned-long-long))
                            (* 512 (cffi:mem-ref writes :unsigned-long-long))))))))))
 
+(define-implementation network-devices ()
+  (let ((list ()))
+    (do-proc ((name :char 32))
+        ("/proc/net/dev" "%31s" (cddr (nreverse list)))
+      (push (cffi:foreign-string-to-lisp name :count (1- (cffi:foreign-funcall "strlen" :pointer name :size))) list))))
+
 (define-implementation network-io-bytes (device)
   (etypecase device
     ((eql T)

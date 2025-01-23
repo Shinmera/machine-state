@@ -314,6 +314,13 @@ See STORAGE-DEVICE-PATH
 See NETWORK-IO-BYTES
 See PROCESS-IO-BYTES")
 
+  (function network-devices
+    "Returns a list of network device names.
+
+If the function is unsupported an empty list is returned.
+
+See NETWORK-IO-BYTES")
+
   (function network-io-bytes
     "Returns the number of bytes of IO performed on the network device.
 
@@ -327,5 +334,6 @@ Returns three values:
 
 If the function is unsupported a constant 0 is returned.
 
+See NETWORK-DEVICES
 See PROCESS-IO-BYTES
 See STORAGE-IO-BYTES"))

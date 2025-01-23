@@ -371,6 +371,27 @@
   (entries :ulong)
   (table (:struct ifrow) :count 128))
 
+(define-implementation network-devices ()
+  (unless (cffi:foreign-library-loaded-p 'iphlpapi)
+    (cffi:load-foreign-library 'iphlpapi))
+  (cffi:with-foreign-objects ((table :pointer))
+    (let ((ret (cffi:foreign-funcall "GetIfTable2" :pointer table :size)))
+      (unless (= 0 ret)
+        (let ((msg (com:error-message ret 'iphlpapi)))
+          (fail (if (string/= "" msg) msg
+                    (format NIL "GetIfTable2 call failed with ~d" ret))))))
+    (let ((table (cffi:mem-ref table :pointer)))
+      (unwind-protect
+           (let ((list ()))
+             (dotimes (i (iftable-entries table) (nreverse list))
+               (let* ((row (cffi:mem-aptr (cffi:foreign-slot-pointer table '(:struct iftable) 'table)
+                                          '(:struct ifrow) i))
+                      (name (com:wstring->string
+                             (cffi:foreign-slot-pointer row '(:struct ifrow) 'alias)
+                             256)))
+                 (push name list))))
+        (cffi:foreign-funcall "FreeMibTable" :pointer table)))))
+
 (define-implementation network-io-bytes (device)
   (unless (cffi:foreign-library-loaded-p 'iphlpapi)
     (cffi:load-foreign-library 'iphlpapi))

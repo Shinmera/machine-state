@@ -25,4 +25,5 @@
    #:storage-device-path
    #:storage-room
    #:storage-io-bytes
+   #:network-devices
    #:network-io-bytes))
