@@ -30,7 +30,7 @@
 
 (define-implementation process-io-bytes ()
   (with-proc ("/proc/self/io" (read "rchar: ") (write "wchar: "))
-    (+ read write)))
+    (values (+ read write) read write)))
 
 ;;;; For whatever reason on Linux rusage is useless for this, so redefine it here.
 (define-implementation process-room ()

@@ -48,9 +48,11 @@
                   :pointer (process)
                   :pointer io-counters
                   :bool)
-    (+ (io-counters-read-bytes io-counters)
-       (io-counters-write-bytes io-counters)
-       (io-counters-other-bytes io-counters))))
+    (values (+ (io-counters-read-bytes io-counters)
+               (io-counters-write-bytes io-counters)
+               (io-counters-other-bytes io-counters))
+            (io-counters-read-bytes io-counters)
+            (io-counters-write-bytes io-counters))))
 
 (cffi:defcstruct (memory-counters :conc-name memory-counters-)
   (cb :uint32)

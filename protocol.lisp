@@ -24,8 +24,8 @@
        (declare (ignorable #'fail))
        ,@body)))
 
-(define-protocol-fun process-io-bytes () ((unsigned-byte 64))
-  0)
+(define-protocol-fun process-io-bytes () ((unsigned-byte 64) (unsigned-byte 64) (unsigned-byte 64))
+  (values 0 0 0))
 
 (define-protocol-fun process-room () ((unsigned-byte 64))
   0)

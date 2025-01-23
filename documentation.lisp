@@ -11,6 +11,11 @@ reason such as lack of access permissions.")
   (function process-io-bytes
     "Returns the number of bytes of IO performed by the process.
 
+Returns three values:
+  The total number of IO bytes performed.
+  The bytes read.
+  The bytes written.
+
 IO in this context refers to any activity to external devices such as
 drives, networking, etc.
 
