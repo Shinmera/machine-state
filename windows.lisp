@@ -313,10 +313,51 @@
     (values (cffi:mem-ref available :int64)
             (cffi:mem-ref total :int64))))
 
+(cffi:defcstruct (disk-performance :conc-name disk-performance-)
+  (bytes-read :int64)
+  (bytes-written :int64)
+  (read-time :int64)
+  (write-time :int64)
+  (idle-time :int64)
+  (read-count :uint32)
+  (write-count :uint32)
+  (queue-depth :uint32)
+  (split-count :uint32)
+  (query-time :int64)
+  (storage-device-number :uint32)
+  (storage-manager-name :uint16 :count 8))
+
 (define-implementation storage-io-bytes (device)
   (when (pathnamep device)
     (setf device (storage-device device)))
-  0)
+  (let ((handle (cffi:foreign-funcall "CreateFileA"
+                                      :string (format NIL "\\\\.\\~a:" device)
+                                      :uint32 0
+                                      :uint32 3 #| FILE_SHARE_READ | FILE_SHARE_WRITE |#
+                                      :pointer (cffi:null-pointer)
+                                      :uint32 3 #| OPEN_EXISTING |#
+                                      :uint32 #x02000000 #| FILE_FLAG_BACKUP_SEMANTICS |#
+                                      :pointer (cffi:null-pointer)
+                                      :pointer)))
+    (when (= (cffi:pointer-address handle) #+64-bit (1- (ash 1 64)) #-64-bit (1- (ash 1 32)))
+      (fail (org.shirakumo.com-on:error-message)))
+    (unwind-protect
+         (cffi:with-foreign-objects ((perf '(:struct disk-performance)))
+           (windows-call "DeviceIoControl"
+                         :pointer handle
+                         :uint32 458784 #| IOCTL_DISK_PERFORMANCE |#
+                         :pointer (cffi:null-pointer)
+                         :uint32 0
+                         :pointer perf
+                         :uint32 (cffi:foreign-type-size '(:struct disk-performance))
+                         :pointer (cffi:null-pointer)
+                         :pointer (cffi:null-pointer)
+                         :bool)
+           (values (+ (disk-performance-bytes-read perf)
+                      (disk-performance-bytes-written perf))
+                   (disk-performance-bytes-read perf)
+                   (disk-performance-bytes-written perf)))
+      (cffi:foreign-funcall "CloseHandle" :pointer handle))))
 
 (define-implementation network-io-bytes (device)
   0)
