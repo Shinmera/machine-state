@@ -9,6 +9,14 @@
               (fail (cffi:foreign-funcall "strerror" :int64 status :string)))
              (T ,@body)))))
 
+#++
+(define-implementation process-io-bytes ()
+  )
+
+#++
+(define-implementation process-room ()
+  )
+
 (cffi:defcstruct (vm-statistics :conc-name vm-statistics-)
   (free-count :uint32)
   (active-count :uint32)
@@ -62,3 +70,44 @@
 
 (define-implementation machine-cores ()
   (sysctl "hw.ncpu" :uint (cffi:mem-ref ret :uint)))
+
+#++
+(define-implementation storage-device (path)
+  )
+
+#++
+(define-implementation storage-device-path (path)
+  )
+
+(cffi:defcstruct (statvfs :size 64 :conc-name statvfs-)
+  (bsize    :uint64 :offset  0)
+  (frsize   :uint64 :offset  8)
+  (blocks   :uint32 :offset 16)
+  (bfree    :uint32 :offset 20)
+  (bavail   :uint32 :offset 24)
+  (files    :uint32 :offset 28)
+  (ffree    :uint32 :offset 32)
+  (favail   :uint32 :offset 36)
+  (fsid     :uint64 :offset 40)
+  (flag     :uint64 :offset 48)
+  (namemax  :uint64 :offset 56))
+
+(define-implementation storage-room (path)
+  (when (stringp path)
+    (setf path (storage-device-path path)))
+  (cffi:with-foreign-objects ((statvfs '(:struct statvfs)))
+    (posix-call "statvfs" :string (pathname-utils:native-namestring path) :pointer statvfs :int)
+    (values (* (statvfs-bavail statvfs)
+               (statvfs-bsize statvfs))
+            (* (statvfs-blocks statvfs)
+               (statvfs-bsize statvfs)))))
+
+#++
+(define-implementation storage-io-bytes (device)
+  (when (pathnamep device)
+    (setf device (storage-device device)))
+  )
+
+#++
+(define-implementation network-io-bytes (device)
+  )

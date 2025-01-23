@@ -285,25 +285,29 @@
                   :bool)
     priority))
 
-(define-implementation storage-room (path)
-  (cffi:with-foreign-objects ((available-to-caller :int64)
-                              (total :int64)
-                              (available :int64))
-    (org.shirakumo.com-on:with-wstring (str (pathname-utils:native-namestring
-                                             (pathname-utils:to-directory path)))
-      (windows-call "GetDiskFreeSpaceExW"
-                    :pointer str
-                    :pointer available-to-caller
-                    :pointer total
-                    :pointer available
-                    :bool))
-    (values (cffi:mem-ref available :int64)
-            (cffi:mem-ref total :int64))))
-
 (define-implementation storage-device (path)
   (if (pathnamep path)
       (pathname-device (merge-pathnames path))
       (storage-device (pathname-utils:parse-native-namestring path))))
+
+(define-implementation storage-device-path (device)
+  (make-pathname :device device :directory '(:absolute)))
+
+(define-implementation storage-room (path)
+  (cffi:with-foreign-objects ((available-to-caller :int64)
+                              (total :int64)
+                              (available :int64))
+    (windows-call "GetDiskFreeSpaceExW"
+                  com:wstring (etypecase path
+                                (string (format NIL "~a:/" path))
+                                (pathname
+                                 (pathname-utils:native-namestring (pathname-utils:to-directory path))))
+                  :pointer available-to-caller
+                  :pointer total
+                  :pointer available
+                  :bool)
+    (values (cffi:mem-ref available :int64)
+            (cffi:mem-ref total :int64))))
 
 (define-implementation storage-io-bytes (device)
   (when (pathnamep device)

@@ -21,4 +21,8 @@
    #:gpu-time
    #:static-room
    #:stack-room
-   #:storage-room))
+   #:storage-device
+   #:storage-device-path
+   #:storage-room
+   #:storage-io-bytes
+   #:network-io-bytes))

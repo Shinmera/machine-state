@@ -19,7 +19,11 @@ Returns three values:
 IO in this context refers to any activity to external devices such as
 drives, networking, etc.
 
-If the function is unsupported a constant 0 is returned.")
+If the function is unsupported a constant 0 is returned for all
+values.
+
+See STORAGE-IO-BYTES
+See NETWORK-IO-BYTES")
   
   (function process-time
     "Returns the amount of processing time spent by this process in seconds.
@@ -28,6 +32,7 @@ This does not include time spent in the kernel.
 
 If the function is unsupported a constant 0.0d0 is returned.
 
+See MACHINE-TIME
 See THREAD-TIME
 See GC-TIME
 See GPU-TIME")
@@ -55,7 +60,7 @@ Returns two values:
   The number of physical bytes occupied
   The total number of physical bytes available
 
-If the function is unsupported a constant 0 is returned for both
+If the function is unsupported a constant 0 is returned for all
 values.
 
 See PROCESS-ROOM
@@ -68,11 +73,14 @@ See STORAGE-ROOM")
   (function machine-cores
     "Returns the number of cores available on the machine.
 
-See THREAD-CORE-MASK
-See MACHINE-TIME")
+If the function is unsupported a constant 1 is returned.
+
+See THREAD-CORE-MASK")
 
   (function machine-uptime
-    "Returns the number of seconds since the machine was started up.")
+    "Returns the number of seconds since the machine was started up.
+
+If the function is unsupported a constant 0 is returned.")
 
   (function machine-time
     "Returns the amount of time spent processing.
@@ -82,6 +90,8 @@ Core may be T for an aggregate of all cores, or an integer of the core number.
 Returns two values:
   The time spent idle in seconds
   The total time spent in seconds
+
+If the function is unsupported a constant 0.0d0 is returned.
 
 See MACHINE-CORES")
   
@@ -94,6 +104,7 @@ Thread may be T for the current thread, or a BT:THREAD.
 
 If the function is unsupported a constant 0.0d0 is returned.
 
+See MACHINE-TIME
 See PROCESS-TIME
 See GC-TIME
 See GPU-TIME")
@@ -178,8 +189,10 @@ See STORAGE-ROOM")
 
 If the function is unsupported a constant 0.0d0 is returned.
 
+See MACHINE-TIME
 See PROCESS-TIME
 See GC-TIME
+See GPU-TIME
 See THREAD-TIME")
   
   (function gpu-room
@@ -214,6 +227,7 @@ is current to this thread.
 
 See PROCESS-TIME
 See GC-TIME
+See MACHINE-TIME
 See THREAD-TIME")
   
   (function static-room
@@ -240,20 +254,78 @@ See PROCESS-ROOM
 See GC-ROOM
 See GPU-ROOM
 See STATIC-ROOM
-See STACK-ROOM
 See STORAGE-ROOM")
 
   (function storage-room
     "Return file system storage usage statistics.
 
+The argument may either be a pathname to a file on the device to
+query, or the system provided name for the device.
+
 Returns two values:
   The number of free bytes
   The total number of bytes available
 
+See STORAGE-DEVICE
+See STORAGE-DEVICE-PATH
 See MACHINE-ROOM
 See PROCESS-ROOM
 See GC-ROOM
 See GPU-ROOM
 See STATIC-ROOM
-See STACK-ROOM
-See STORAGE-ROOM"))
+See STACK-ROOM")
+
+  (function storage-device
+    "Return the system device name of the device backing the path.
+
+Returns the device name as a string if it can be found and signals a
+QUERY-FAILED error otherwise.
+
+See STORAGE-DEVICE-PATH
+See STORAGE-ROOM
+See STORAGE-IO-BYTES")
+
+  (function storage-device-path
+    "Return a path which the storage device is backing if any.
+
+Returns the path as a directory pathname if it can be found and
+signals a QUERY-FAILED error otherwise.
+
+See STORAGE-DEVICE
+See STORAGE-ROOM
+See STORAGE-IO-BYTES")
+
+  (function storage-io-bytes
+    "Returns the number of bytes of IO performed on the storage device.
+
+The argument may either be a pathname to a file on the device to
+query, the system provided name for the device, or T to get an
+aggregate of all attached devices.
+
+Returns three values:
+  The total number of IO bytes performed.
+  The bytes read.
+  The bytes written.
+
+If the function is unsupported a constant 0 is returned.
+
+See STORAGE-DEVICE
+See STORAGE-DEVICE-PATH
+See NETWORK-IO-BYTES
+See PROCESS-IO-BYTES")
+
+  (function network-io-bytes
+    "Returns the number of bytes of IO performed on the network device.
+
+The argument may either be the system name of the device as a string
+or T to get an aggregate of all attached devices.
+
+Returns three values:
+  The total number of IO bytes performed.
+  The bytes read.
+  The bytes written.
+
+If the function is unsupported a constant 0 is returned.
+
+See PROCESS-IO-BYTES
+See STORAGE-IO-BYTES"))

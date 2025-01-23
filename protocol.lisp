@@ -161,18 +161,22 @@
   #+(or ccl clisp sbcl)
   0)
 
-(define-protocol-fun storage-device ((path (or string pathname))) ((or null string))
+(define-protocol-fun storage-device ((path (or string pathname))) (string)
   (declare (ignore path))
-  NIL)
+  (fail "Not implemented."))
+
+(define-protocol-fun storage-device-path ((device string)) (string)
+  (declare (ignore path))
+  (fail "Not implemented."))
 
 (define-protocol-fun storage-room ((path (or string pathname))) ((unsigned-byte 64) (unsigned-byte 64))
   (declare (ignore path))
   (values 0 0))
 
-(define-protocol-fun storage-io-bytes ((path T)) ((unsigned-byte 64))
+(define-protocol-fun storage-io-bytes ((path T)) ((unsigned-byte 64) (unsigned-byte 64) (unsigned-byte 64))
   (declare (ignore path))
-  0)
+  (values 0 0 0))
 
 (define-protocol-fun network-io-bytes ((device T)) ((unsigned-byte 64))
   (declare (ignore device))
-  0)
+  (values 0 0 0))

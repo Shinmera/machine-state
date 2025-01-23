@@ -63,6 +63,38 @@
                    (= (cffi:mem-ref r :int) (1- (ldb (byte 8 0) dev))))
           (return (cffi:foreign-string-to-lisp name :max-chars 32)))))))
 
+(define-implementation storage-device-path (device)
+  (do-proc "/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*s %*s - %*s /dev/%s"
+      ((mount :char 512) (name :char 32))
+      (fail "Device not found in mountinfo table")
+    (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size 32 :int))
+      (return (pathname-utils:parse-native-namestring
+               (cffi:foreign-string-to-lisp mount :max-chars 32)
+               :as :directory)))))
+
+(cffi:defcstruct (statvfs :size 112 :conc-name statvfs-)
+  (bsize    :uint64 :offset  0)
+  (frsize   :uint64 :offset  8)
+  (blocks   :uint64 :offset 16)
+  (bfree    :uint64 :offset 24)
+  (bavail   :uint64 :offset 32)
+  (files    :uint64 :offset 40)
+  (ffree    :uint64 :offset 48)
+  (favail   :uint64 :offset 56)
+  (fsid     :uint64 :offset 64)
+  (flag     :uint64 :offset 72)
+  (namemax  :uint64 :offset 80))
+
+(define-implementation storage-room (path)
+  (when (stringp path)
+    (setf path (storage-device-path path)))
+  (cffi:with-foreign-objects ((statvfs '(:struct statvfs)))
+    (posix-call "statvfs" :string (pathname-utils:native-namestring path) :pointer statvfs :int)
+    (values (* (statvfs-bavail statvfs)
+               (statvfs-bsize statvfs))
+            (* (statvfs-blocks statvfs)
+               (statvfs-bsize statvfs)))))
+
 (define-implementation storage-io-bytes (device)
   (when (pathnamep device)
     (setf device (storage-device device)))
