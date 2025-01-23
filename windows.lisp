@@ -9,6 +9,9 @@
 (cffi:define-foreign-library pdh
   (:windows "Pdh.dll"))
 
+(cffi:define-foreign-library iphlpapi
+  (:windows "Iphlpapi.dll"))
+
 (cffi:use-foreign-library psapi)
 (cffi:use-foreign-library ntdll)
 
@@ -359,5 +362,45 @@
                    (disk-performance-bytes-written perf)))
       (cffi:foreign-funcall "CloseHandle" :pointer handle))))
 
+(cffi:defcstruct (ifrow :size 1352 :conc-name ifrow-)
+  (alias       :uint16 :count 257 :offset 28)
+  (in-octets   :uint64 :offset 1208)
+  (out-octets  :uint64 :offset 1280))
+
+(cffi:defcstruct (iftable :conc-name iftable-)
+  (entries :ulong)
+  (table (:struct ifrow) :count 128))
+
 (define-implementation network-io-bytes (device)
-  0)
+  (unless (cffi:foreign-library-loaded-p 'iphlpapi)
+    (cffi:load-foreign-library 'iphlpapi))
+  (cffi:with-foreign-objects ((table :pointer))
+    (let ((ret (cffi:foreign-funcall "GetIfTable2" :pointer table :size)))
+      (unless (= 0 ret)
+        (let ((msg (com:error-message ret 'iphlpapi)))
+          (fail (if (string/= "" msg) msg
+                    (format NIL "GetIfTable2 call failed with ~d" ret))))))
+    (let ((table (cffi:mem-ref table :pointer)))
+      (unwind-protect
+           (etypecase device
+             ((eql T)
+              (let ((read 0) (write 0))
+                (declare (type (unsigned-byte 64) read write))
+                (dotimes (i (iftable-entries table) (values (+ read write) read write))
+                  (let ((row (cffi:mem-aptr (cffi:foreign-slot-pointer table '(:struct iftable) 'table)
+                                            '(:struct ifrow) i)))
+                    (incf read (ifrow-in-octets row))
+                    (incf write (ifrow-out-octets row))))))
+             (string
+              (dotimes (i (iftable-entries table) (fail "No such device found."))
+                (let* ((row (cffi:mem-aptr (cffi:foreign-slot-pointer table '(:struct iftable) 'table)
+                                           '(:struct ifrow) i))
+                       (name (com:wstring->string
+                              (cffi:foreign-slot-pointer row '(:struct ifrow) 'alias)
+                              256)))
+                  (when (string= name device)
+                    (return (values (+ (ifrow-in-octets row)
+                                       (ifrow-out-octets row))
+                                    (ifrow-in-octets row)
+                                    (ifrow-out-octets row))))))))
+        (cffi:foreign-funcall "FreeMibTable" :pointer table)))))

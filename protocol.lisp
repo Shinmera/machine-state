@@ -177,6 +177,6 @@
   (declare (ignore path))
   (values 0 0 0))
 
-(define-protocol-fun network-io-bytes ((device T)) ((unsigned-byte 64))
+(define-protocol-fun network-io-bytes ((device T)) ((unsigned-byte 64) (unsigned-byte 64) (unsigned-byte 64))
   (declare (ignore device))
   (values 0 0 0))
