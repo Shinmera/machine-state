@@ -297,3 +297,16 @@
                     :bool))
     (values (cffi:mem-ref available :int64)
             (cffi:mem-ref total :int64))))
+
+(define-implementation storage-device (path)
+  (if (pathnamep path)
+      (pathname-device (merge-pathnames path))
+      (storage-device (pathname-utils:parse-native-namestring path))))
+
+(define-implementation storage-io-bytes (device)
+  (when (pathnamep device)
+    (setf device (storage-device device)))
+  0)
+
+(define-implementation network-io-bytes (device)
+  0)
