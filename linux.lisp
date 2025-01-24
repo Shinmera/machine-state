@@ -25,7 +25,10 @@
                   do (when (= ,(length vars) (cffi:foreign-funcall "sscanf" :pointer io :string ,fgetsspec
                                                                    ,@(loop for (name) in vars collect :pointer collect name)
                                                                    :int))
-                       ,@body)
+                       (let ,(loop for (var type count) in vars
+                                   when (null count)
+                                   collect `(,var (cffi:mem-ref ,var ',type)))
+                         ,@body))
                   finally (progn (return ,return)))
          (cffi:foreign-funcall "fclose" :pointer file :void)))))
 
@@ -43,11 +46,14 @@
     (flet ((conv (x) (* x scale)))
       (etypecase core
         ((eql T)
-         (with-proc ("/proc/stat" (user "cpu  ") (nice " ") (system " ") (idle " "))
-           (values (conv idle) (conv (+ user nice system idle)))))
+         (do-proc ((user :int) (nice :int) (system :int) (idle :int) (iowait :int) (irq :int) (softirq :int))
+             ("/proc/stat" "cpu %d %d %d %d %d %d %d")
+           (return (values (conv idle) (conv (+ user nice system idle iowait irq softirq))))))
         (integer
-         (with-proc ("/proc/stat" (user (format NIL "cpu~d " core)) (nice " ") (system " ") (idle " "))
-           (values (conv idle) (conv (+ user nice system idle)))))))))
+         (do-proc ((c :int) (user :int) (nice :int) (system :int) (idle :int) (iowait :int) (irq :int) (softirq :int))
+             ("/proc/stat" "cpu%d %d %d %d %d %d %d %d" (fail "No such core."))
+           (when (= c core)
+             (return (values (conv idle) (conv (+ user nice system idle iowait irq softirq)))))))))))
 
 (cffi:defcstruct (stat :size 144 :conc-name stat-)
   (dev     :uint64 :offset  0))
@@ -60,8 +66,8 @@
       (do-proc ((l :int) (r :int) (name :char 32))
           ("/proc/self/mountinfo" "%*d %*d %d:%d / %*s %*s %*s - %*s /dev/%s"
                                   (fail "Device not found in mountinfo table"))
-        (when (and (= (cffi:mem-ref l :int) (ldb (byte 32 8) dev))
-                   (= (cffi:mem-ref r :int) (1- (ldb (byte 8 0) dev))))
+        (when (and (= l (ldb (byte 32 8) dev))
+                   (= r (1- (ldb (byte 8 0) dev))))
           (return (cffi:foreign-string-to-lisp name :max-chars 32)))))))
 
 (define-implementation storage-device-path (device)
@@ -113,18 +119,17 @@
                                         (* 512 write)))
            (when (/= 0 (cffi:foreign-funcall "strncmp" :pointer lasttop :pointer name :size (cffi:foreign-funcall "strlen" :pointer lasttop :size) :int))
              (cffi:foreign-funcall "strncpy" :pointer lasttop :pointer name :size 32)
-             (incf read (cffi:mem-ref reads :unsigned-long-long))
-             (incf write (cffi:mem-ref writes :unsigned-long-long))))))
+             (incf read reads)
+             (incf write writes)))))
       (string
        (do-proc ((name :char 32)
                  (reads :unsigned-long-long)
                  (writes :unsigned-long-long))
            ("/proc/diskstats" "%*d %*d %31s %*u %*u %llu %*u %*u %*u %llu" (fail "No such device."))
          (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size 32 :int))
-           (return (values (* 512 (+ (cffi:mem-ref reads :unsigned-long-long)
-                                     (cffi:mem-ref writes :unsigned-long-long)))
-                           (* 512 (cffi:mem-ref reads :unsigned-long-long))
-                           (* 512 (cffi:mem-ref writes :unsigned-long-long))))))))))
+           (return (values (* 512 (+ reads writes))
+                           (* 512 reads)
+                           (* 512 writes)))))))))
 
 (define-implementation network-devices ()
   (let ((list ()))
@@ -142,8 +147,8 @@
            ("/proc/net/dev" "%31s %llu %*u %*u %*u %*u %*u %*u %*u %llu %*u"
                             (values (+ read write) read write))
          (unless (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string "lo:" :size 32 :int))
-           (incf read (cffi:mem-ref reads :unsigned-long-long))
-           (incf write (cffi:mem-ref writes :unsigned-long-long))))))
+           (incf read reads)
+           (incf write writes)))))
     (string
      (do-proc ((name :char 32)
                (reads :unsigned-long-long)
@@ -151,7 +156,6 @@
          ("/proc/net/dev" "%31s %llu %*u %*u %*u %*u %*u %*u %*u %llu %*u"
                           (fail "No such device."))
        (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size (1- (length device)) :int))
-         (return (values (+ (cffi:mem-ref reads :unsigned-long-long)
-                            (cffi:mem-ref writes :unsigned-long-long))
-                         (cffi:mem-ref reads :unsigned-long-long)
-                         (cffi:mem-ref writes :unsigned-long-long))))))))
+         (return (values (+ reads writes)
+                         reads
+                         writes)))))))
