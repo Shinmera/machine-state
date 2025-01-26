@@ -95,10 +95,14 @@
   #-(or ccl sbcl ecl clasp abcl clisp)
   (values 0 0))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun find-symbol* (name package)
+    (find-symbol (string name) (string package))))
+
 (define-protocol-fun gc-time () (double-float)
   #+sbcl
-  (/ (float #.(or (find-symbol "*GC-REAL-TIME*" "SB-EXT")
-                  (find-symbol "*GC-RUN-TIME*" "SB-EXT")
+  (/ (float #.(or (find-symbol* "*GC-REAL-TIME*" "SB-EXT")
+                  (find-symbol* "*GC-RUN-TIME*" "SB-EXT")
                   0d0)
             0d0)
      INTERNAL-TIME-UNITS-PER-SECOND)
@@ -131,8 +135,8 @@
   (let* ((stack-total (- sb-vm::*control-stack-end* sb-vm::*control-stack-start*))
          (spaces (ignore-errors
                   (symbol-value
-                   (or (uiop:find-symbol* :+all-spaces+ :sb-vm nil)
-                       (uiop:find-symbol* :+stack-spaces+ :sb-vm nil))))))
+                   (or (find-symbol* :+all-spaces+ :sb-vm)
+                       (find-symbol* :+stack-spaces+ :sb-vm))))))
     (values
      ;; FIXME: This is implemented the way it is because sometimes
      ;; either of +all-spaces+ or +stack-spaces+ is undefined due to
@@ -154,7 +158,7 @@
   #+clisp
   (nth-value 2 (sys::%room))
   #+sbcl
-  (let ((spaces (ignore-errors (symbol-value (uiop:find-symbol* :+all-spaces+ :sb-vm nil)))))
+  (let ((spaces (ignore-errors (symbol-value (find-symbol* :+all-spaces+ :sb-vm)))))
     (if spaces
         (funcall (third (find :static spaces :key #'first)))
         0))
