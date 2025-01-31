@@ -64,7 +64,7 @@
       (fail (cffi:foreign-funcall "strerror" :int64 errno)))
     (let ((dev (stat-dev stat)))
       (do-proc ((l :int) (r :int) (name :char 32))
-          ("/proc/self/mountinfo" "%*d %*d %d:%d / %*s %*s %*s - %*s /dev/%s"
+          ("/proc/self/mountinfo" "%*d %*d %d:%d / %*[^-]- %*s /dev/%s"
                                   (fail "Device not found in mountinfo table"))
         (when (and (= l (ldb (byte 32 8) dev))
                    (= r (1- (ldb (byte 8 0) dev))))
