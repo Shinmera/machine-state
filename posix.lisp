@@ -2,16 +2,19 @@
 
 (cffi:defcvar (errno "errno") :int64)
 
+(defun strerror ()
+  (cffi:foreign-funcall "strerror" :int64 errno :string))
+
 (defmacro posix-call (function &rest args)
   `(let ((val (cffi:foreign-funcall ,function ,@args)))
-     (if (= -1 val)
-         (fail (cffi:foreign-funcall "strerror" :int64 errno :string))
+     (if (< val 0)
+         (fail (strerror))
          val)))
 
 (defmacro posix-call0 (function &rest args)
   `(let ((val (cffi:foreign-funcall ,function ,@args)))
      (if (/= 0 val)
-         (fail (cffi:foreign-funcall "strerror" :int64 errno :string))
+         (fail (strerror))
          val)))
 
 (cffi:defcstruct (timeval :conc-name timeval-)

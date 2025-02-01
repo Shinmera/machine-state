@@ -4,7 +4,7 @@
   `(cffi:with-foreign-object (io :char 2048)
      (let ((file (cffi:foreign-funcall "fopen" :string ,file :string "rb" :pointer)))
        (when (cffi:null-pointer-p file)
-         (fail (cffi:foreign-funcall "strerror" :int64 errno)))
+         (fail (strerror)))
        (cffi:foreign-funcall "fread" :pointer io :size 1 :size 2048 :pointer file :size)
        (cffi:foreign-funcall "fclose" :pointer file :void))
      (let ,(loop for (var field) in fields
@@ -19,7 +19,7 @@
                                ,@vars)
      (let ((file (cffi:foreign-funcall "fopen" :string ,file :string "rb" :pointer)))
        (when (cffi:null-pointer-p file)
-         (fail (cffi:foreign-funcall "strerror" :int64 errno)))
+         (fail (strerror)))
        (unwind-protect 
             (loop while (/= 0 (cffi:foreign-funcall "fgets" :pointer io :size 2048 :pointer file :int))
                   do (when (= ,(length vars) (cffi:foreign-funcall "sscanf" :pointer io :string ,fgetsspec
@@ -71,8 +71,7 @@
 (defun find-mount-root (path)
   (labels ((dev-id (path)
              (cffi:with-foreign-objects ((stat '(:struct stat)))
-               (when (< (cffi:foreign-funcall "stat" :string (pathname-utils:native-namestring path) :pointer stat :int) 0)
-                 (fail (cffi:foreign-funcall "strerror" :int64 errno)))
+               (posix-call "stat" :string (pathname-utils:native-namestring path) :pointer stat :int)
                (stat-dev stat)))
            (rec (path &optional (id (dev-id path)))
              (if (pathname-utils:root-p path)
