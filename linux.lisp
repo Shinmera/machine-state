@@ -59,29 +59,11 @@
   (dev     :uint64 :offset 0)
   (mode    :uint32 :offset 24))
 
-(defun readlink (path)
-  (cffi:with-foreign-objects ((buf :char 512))
-    (let ((size (cffi:foreign-funcall "readlink" :string (pathname-utils:native-namestring path) :pointer buf :int 512 :int)))
-      (when (= size -1)
-        (fail (cffi:foreign-funcall "strerror" :int64 errno)))
-      (cffi:foreign-string-to-lisp buf :max-chars size))))
-
-(defconstant +s-ifmt+ #o170000)
-(defconstant +s-iflnk+ #o120000)
-(defun s-istype (mode mask) (= (logand mode +s-ifmt+) mask))
-(defun s-islnk (mode) (s-istype mode +s-iflnk+))
-
-(defun symlinkp (path)
-  (cffi:with-foreign-objects ((stat '(:struct stat)))
-    (when (< (cffi:foreign-funcall "lstat" :string (pathname-utils:native-namestring path) :pointer stat :int) 0)
-      (fail (cffi:foreign-funcall "strerror" :int64 errno)))
-    (s-islnk (stat-mode stat))))
-
 (defun pathname-force-file (path)
   (cond
     ((pathname-utils:root-p path) path)
     ((pathname-utils:file-p path) path)
-    (t (let ((directories (pathname-directory path)))
+    (T (let ((directories (pathname-directory path)))
          (make-pathname :defaults path
                         :directory (butlast directories)
                         :name (car (last directories)))))))
@@ -100,11 +82,7 @@
                    (if (= parent-id id)
                        (rec parent parent-id)
                        path)))))
-    (let* ((root (rec path))
-           (root-file (pathname-force-file root)))
-      (if (symlinkp root-file)
-          (find-mount-root (readlink root-file))
-          root))))
+    (pathname-force-file (rec (truename path)))))
 
 (define-implementation storage-device (path)
   (let* ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
