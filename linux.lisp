@@ -86,14 +86,14 @@
 (define-implementation storage-device (path)
   (let* ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
     (do-proc ((mountpoint :char 512) (name :char 32))
-        ("/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*[^-]- %*s %s"
+        ("/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*[^-]- %*s /dev/%s"
                                 (fail "Device not found in mountinfo table"))
       (when (= 0 (cffi:foreign-funcall "strncmp" :pointer mountpoint :string mount-root :size 32 :int))
         (return (cffi:foreign-string-to-lisp name :max-chars 32))))))
 
 (define-implementation storage-device-path (device)
   (do-proc ((mount :char 512) (name :char 32))
-      ("/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*[^-]- %*s %s"
+      ("/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*[^-]- %*s /dev/%s"
                               (fail "Device not found in mountinfo table"))
     (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size 32 :int))
       (return (pathname-utils:parse-native-namestring
