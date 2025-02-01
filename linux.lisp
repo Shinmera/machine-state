@@ -112,14 +112,11 @@
         ("/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*[^-]- %*s %s"
                                 (fail "Device not found in mountinfo table"))
       (when (= 0 (cffi:foreign-funcall "strncmp" :pointer mountpoint :string mount-root :size 32 :int))
-        (return (pathname-name
-                 (pathname-utils:parse-native-namestring
-                  (cffi:foreign-string-to-lisp name :max-chars 32)
-                  :as :file)))))))
+        (return (cffi:foreign-string-to-lisp name :max-chars 32))))))
 
 (define-implementation storage-device-path (device)
   (do-proc ((mount :char 512) (name :char 32))
-      ("/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*[^-]- %*s /dev/%s"
+      ("/proc/self/mountinfo" "%*d %*d %*d:%*d / %s %*[^-]- %*s %s"
                               (fail "Device not found in mountinfo table"))
     (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size 32 :int))
       (return (pathname-utils:parse-native-namestring
