@@ -126,6 +126,8 @@
 (define-implementation storage-io-bytes (device)
   (when (pathnamep device)
     (setf device (storage-device device)))
+  ;; device-mapper crap might have the device be a symlink, so resolve it.
+  (setf device (pathname-name (truename (make-pathname :name device :directory '(:absolute "dev")))))
   (cffi:with-foreign-objects ((lasttop :char 32))
     (setf (cffi:mem-aref lasttop :char 0) 1)
     (etypecase device
