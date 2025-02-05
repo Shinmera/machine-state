@@ -196,7 +196,7 @@
 
 (define-implementation machine-core-info ()
   (let (vendor model version)
-    (do-proc ((key :char 32) (value :char 512)) ("/proc/cpuinfo" "%[^:]: %512s")
+    (do-proc ((key :char 32) (value :char 512)) ("/proc/cpuinfo" #.(format NIL "%[^:]: %512[^~a]" #\Linefeed))
       (let ((key (cffi:foreign-string-to-lisp key :max-chars 32)))
         (flet ((val ()
                  (cffi:foreign-string-to-lisp value :max-chars 512)))
