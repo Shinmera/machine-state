@@ -319,7 +319,8 @@ See PROCESS-IO-BYTES")
 
 If the function is unsupported an empty list is returned.
 
-See NETWORK-IO-BYTES")
+See NETWORK-IO-BYTES
+See NETWORK-ADDRESS")
 
   (function network-io-bytes
     "Returns the number of bytes of IO performed on the network device.
@@ -336,4 +337,162 @@ If the function is unsupported a constant 0 is returned.
 
 See NETWORK-DEVICES
 See PROCESS-IO-BYTES
-See STORAGE-IO-BYTES"))
+See STORAGE-IO-BYTES")
+
+  (function machine-info
+    "Returns information about the host machine.
+
+Returns four values:
+  The name of the vendor of the machine (or motherboard) as a string
+  The name of the model of the machine (or motherboard) as a string
+  The name of the operating system of the machine as a keyword:
+    :WINDOWS
+    :LINUX
+    :DARWIN
+    :ANDROID
+    :IOS
+    :NETBSD
+    :FREEBSD
+    :OPENBSD
+    :BEOS
+    :SOLARIS
+    :REACT
+    :PLAN9
+    :MEZZANO
+    :NX
+    NIL
+  The version of the operating system as a string
+
+If the function is unsupported,
+  \"Unknown\"
+  \"Unknown\"
+  NIL
+  \"Unknown\"
+are returned.
+
+See MACHINE-CORE-INFO
+See PROCESS-INFO
+See GPU-INFO
+See NETWORK-INFO")
+
+  (function machine-battery
+    "Returns information about the battery charge state, if any.
+
+Returns three values:
+  Current charge
+  Full charge
+  Charging state:
+    :CHARGING
+    :DISCHARGING
+    :FULL
+    NIL
+
+If no battery is attached or the function is unsupported, 
+  0
+  0
+  NIL
+are returned.")
+
+  (function machine-core-info
+    "Returns information about the host machine's processor.
+
+Returns four values:
+  The name of the vendor of the processor as a string
+  The name of the model of the processor as a string
+  The name of the architecture as a keyword:
+    :X86
+    :AMD64
+    :ARM
+    :ARM64
+    :RISCV
+    :RISCV64
+    :PPC
+    :SPARC
+    NIL
+  The version of the architecture as a string
+
+If the function is unsupported,
+  \"Unknown\"
+  \"Unknown\"
+  NIL
+  \"Unknown\"
+are returned.
+
+See MACHINE-INFO
+See PROCESS-INFO
+See GPU-INFO
+See NETWORK-INFO")
+
+  (function process-info
+    "Returns information about the current process.
+
+Returns four values:
+   The path to the executable as a pathname
+   The current working directory as a pathname
+   The running user as a string or NIL
+   The running group as a string or NIL
+
+If the function is unsupported,
+  *default-pathname-defaults*
+  *default-pathname-defaults*
+  \"Unknown\"
+  \"Unknown\"
+are returned.
+
+See MACHINE-INFO
+See MACHINE-CORE-INFO
+See GPU-INFO
+See NETWORK-INFO")
+
+  (function gpu-info
+    "Returns information about the graphics card.
+
+Returns two values:
+   The vendor of the graphics card as a keyword:
+     :NVIDIA
+     :AMD (formerly ATI)
+     :INTEL
+     and others
+  The model of the graphics card as a string
+
+If the function is unsupported,
+  NIL
+  \"Unknown\"
+are returned.
+
+See MACHINE-INFO
+See MACHINE-CORE-INFO
+See PROCESS-INFO
+See NETWORK-INFO")
+
+  (function network-info
+    "Returns information about the machine's network state.
+
+Returns one value:
+   The hostname of the machine as a string
+
+If the function is unsupported,
+  NIL
+is returned.
+
+See MACHINE-INFO
+See MACHINE-CORE-INFO
+See PROCESS-INFO
+See GPU-INFO")
+
+  (function network-address
+    "Returns information about a network device's addresses.
+
+Returns three values:
+  The device's MAC address as a string
+  The device's IPv4 address as a string or NIL
+  The device's IPv6 address as a string or NIL
+
+If the function is unsupported,
+  NIL
+  NIL
+  NIL
+are returned.
+
+See NETWORK-DEVICES
+See NETWORK-INFO"))

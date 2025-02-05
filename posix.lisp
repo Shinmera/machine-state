@@ -162,3 +162,25 @@
                                           (:realtime 99)))
         (posix-call0 "pthread_setschedparam" :pointer handle :int policy :pointer param :int)))
     priority))
+
+(define-implementation network-info ()
+  (cffi:with-foreign-object (hostname :char 512)
+    (posix-call "gethostname" :pointer hostname :size 512 :int)
+    (cffi:foreign-string-to-lisp hostname :max-chars 512)))
+
+(define-protocol-fun self () (pathname)
+  *default-pathname-defaults*)
+
+(define-implementation process-info ()
+  (values
+   (self)
+   (pathname-utils:parse-native-namestring
+    (cffi:with-foreign-object (path :char 1024)
+      (cffi:foreign-funcall "getcwd" :pointer path :size 1024)
+      (cffi:foreign-string-to-lisp path :max-chars 1024))
+    :as :directory)
+   (cffi:foreign-funcall "getlogin" :string)
+   (let ((gid (cffi:foreign-funcall "getpwuid" :size (cffi:foreign-funcall "getgid" :size) :pointer)))
+     (if (cffi:null-pointer-p gid)
+         "Unknown"
+         (cffi:mem-ref gid :string)))))

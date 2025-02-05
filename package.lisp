@@ -26,4 +26,11 @@
    #:storage-room
    #:storage-io-bytes
    #:network-devices
-   #:network-io-bytes))
+   #:network-io-bytes
+   #:machine-info
+   #:machine-battery
+   #:machine-core-info
+   #:process-info
+   #:gpu-info
+   #:network-info
+   #:network-address))

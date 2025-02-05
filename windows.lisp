@@ -12,6 +12,15 @@
 (cffi:define-foreign-library iphlpapi
   (:windows "Iphlpapi.dll"))
 
+(cffi:define-foreign-library secur32
+  (:windows "Secur32.dll"))
+
+(cffi:define-foreign-library advapi32
+  (:windows "Advapi32.dll"))
+
+(cffi:define-foreign-library oleaut32
+  (:windows "OleAut32.dll"))
+
 (cffi:use-foreign-library psapi)
 (cffi:use-foreign-library ntdll)
 
@@ -425,3 +434,268 @@
                                     (ifrow-in-octets row)
                                     (ifrow-out-octets row))))))))
         (cffi:foreign-funcall "FreeMibTable" :pointer table)))))
+
+(cffi:defcstruct (version-info :conc-name version-info-)
+  (size :ulong)
+  (major :ulong)
+  (minor :ulong)
+  (build-number :ulong)
+  (platform-id :ulong)
+  (csd-version :uint16 :count 128))
+
+(cffi:defcstruct (variant :conc-name variant-)
+  (type :ushort)
+  (reserved1 :uint16)
+  (reserved2 :uint16)
+  (reserved3 :uint16)
+  (value :pointer))
+
+(com:define-guid clsid-wbem-locator #x4590f811 #x1d3a #x11d0 #x89 #x1f #x00 #xaa #x00 #x4b #x2e #x24)
+(com:define-guid iid-iwbem-locator #xdc12a687 #x737f #x11cf #x88 #x4d #x00 #xaa #x00 #x4b #x2e #x24)
+
+(com:define-comstruct i-wbem-locator
+  (connect-server (network-resource com:wstring)
+                  (user com:wstring)
+                  (password com:wstring)
+                  (locale com:wstring)
+                  (security-flags :long)
+                  (authority com:wstring)
+                  (context :pointer)
+                  (namespace :pointer)))
+
+(com:define-comstruct i-wbem-services
+  open-namespace
+  cancel-async-call
+  query-object-sink
+  get-object
+  get-object-async
+  put-class
+  put-class-async
+  delete-class
+  delete-class-async
+  create-class-enum
+  create-class-enum-async
+  put-instance
+  put-instance-async
+  delete-instance
+  delete-instance-async
+  create-instance-enum
+  create-instance-enum-async
+  (exec-query (query-language com:wstring) (query com:wstring) (flags :long) (context :pointer) (enumerator :pointer))
+  exec-query-async
+  exec-notification-query
+  exec-notification-query-async
+  exec-method
+  exec-method-async)
+
+(com:define-comstruct i-enum-wbem-class-object
+  reset
+  (next (timeout :long) (count :ulong) (objects :pointer) (returned :pointer))
+  next-async
+  clone
+  skip)
+
+(com:define-comstruct i-wbem-class-object
+  get-qualifier-set
+  (get (name com:wstring) (flags :long) (value :pointer) (type :pointer) (flavor :pointer))
+  put
+  delete
+  get-names
+  begin-enumeration
+  next
+  end-enumeration
+  get-property-qualifier-set
+  clone
+  get-object-text
+  spawn-derived-class
+  spawn-instance
+  compare-to
+  get-property-origin
+  inherits-from
+  get-method
+  put-method
+  delete-method
+  begin-method-enumeration
+  next-method
+  end-method-enumeration
+  get-method-qualifier-set
+  get-method-origin)
+
+(defun wmi-query (query &rest props)
+  (unless (cffi:foreign-library-loaded-p 'oleaut32)
+    (cffi:load-foreign-library 'oleaut32))
+  (com:with-com (locator (com:create clsid-wbem-locator iid-iwbem-locator))
+    (cffi:with-foreign-objects ((value :pointer)
+                                (status :ulong)
+                                (variant '(:struct variant)))
+      (i-wbem-locator-connect-server locator "Root\\CIMV2" NIL NIL NIL 0 NIL (cffi:null-pointer) value)
+      (com:with-com (services (cffi:mem-ref value :pointer))
+        (cffi:foreign-funcall "CoSetProxyBlanket" :pointer services
+                                                  :uint32 10 #| RPC_C_AUTHN_WINNT |#
+                                                  :uint32 0  #| RPC_C_AUTHZ_NONE |#
+                                                  :pointer (cffi:null-pointer)
+                                                  :uint32 3 #| RPC_C_AUTHN_LEVEL_CALL |#
+                                                  :uint32 3 #| RPC_C_IMP_LEVEL_IMPERSONATE |#
+                                                  :pointer (cffi:null-pointer)
+                                                  :uint32 0 #| EOAC_NONE |#)
+        (i-wbem-services-exec-query services "WQL" query
+                                    (logior #x20 #| WBEM_FLAG_FORWARD_ONLY |#
+                                            #x10 #| WBEM_FLAG_RETURN_IMMEDIATELY |#)
+                                    (cffi:null-pointer) value)
+        (com:with-com (enumerator (cffi:mem-ref value :pointer))
+          (when (cffi:null-pointer-p enumerator)
+            (fail "WMI query failed."))
+          (i-enum-wbem-class-object-next enumerator -1 #| WBEM_INFINITE |# 1 value status)
+          (unless (= 0 (cffi:mem-ref status :ulong))
+            (com:with-com (object (cffi:mem-ref value :pointer))
+              (cffi:foreign-funcall "VariantInit" :pointer variant)
+              (loop for prop in props
+                    do (cffi:foreign-funcall "VariantClear" :pointer variant)
+                       (i-wbem-class-object-get object prop 0 variant (cffi:null-pointer) (cffi:null-pointer))
+                    collect (case (variant-type variant)
+                              (8 (com:wstring->string (variant-value variant))))))))))))
+
+(define-implementation machine-info ()
+  (destructuring-bind (&optional vendor model) (wmi-query "SELECT * FROM Win32_BaseBoard" "Manufacturer" "Product")
+    (values vendor
+            model
+            :windows
+            (cffi:with-foreign-objects ((version '(:struct version-info)))
+              (setf (version-info-size version) (cffi:foreign-type-size '(:struct version-info)))
+              (nt-call "RtlGetVersion" :pointer version :size)
+              (format NIL "~d.~d-~a"
+                      (version-info-major version) (version-info-minor version)
+                      (version-info-build-number version))))))
+
+(define-implementation machine-core-info ()
+  (destructuring-bind (&optional vendor model version) (wmi-query "SELECT * FROM Win32_Processor" "Manufacturer" "Name" "Version")
+    (values (or vendor "Unknown")
+            (or model "Unknown")
+            (arch-type)
+            (or version "Unknown"))))
+
+(define-implementation network-info ()
+  (cffi:with-foreign-object (hostname :char 512)
+    (cffi:foreign-funcall "gethostname" :pointer hostname :size 512 :int)
+    (cffi:foreign-string-to-lisp hostname :max-chars 512)))
+
+(define-implementation process-info ()
+  (unless (cffi:foreign-library-loaded-p 'advapi32)
+    (cffi:load-foreign-library 'advapi32))
+  (values
+   (cffi:with-foreign-object (name :uint16 1024)
+     (cffi:foreign-funcall "GetModuleFileNameW" :pointer (cffi:null-pointer) :pointer name :uint32 1024 :uint32)
+     (pathname-utils:parse-native-namestring (com:wstring->string name)))
+   (pathname-utils:parse-native-namestring
+    (cffi:with-foreign-object (path :uint16 1024)
+      (cffi:foreign-funcall "_wgetcwd" :pointer path :size 1024)
+      (com:wstring->string path))
+    :as :directory)
+   (cffi:with-foreign-objects ((name :uint16 512)
+                               (length :uint32))
+     (setf (cffi:mem-ref length :uint32) 512)
+     (windows-call "GetUserNameW" :pointer name :pointer length :bool)
+     (com:wstring->string name (cffi:mem-ref length :uint32)))
+   "Unknown"))
+
+(cffi:defcstruct (sockaddr4 :conc-name sockaddr4-)
+  (family :uint16)
+  (port :uint16)
+  (addr :uint32))
+
+(cffi:defcstruct (sockaddr6 :conc-name sockaddr6-)
+  (family :ushort)
+  (port :ushort)
+  (flow-info :ulong)
+  (addr :uint16 :count 8)
+  (scope-id :long))
+
+(cffi:defcstruct (address :conc-name address-)
+  (length :ulong)
+  (flags :uint32)
+  (next :pointer)
+  (sockaddr :pointer)
+  (sockaddr-length :int))
+
+(cffi:defcstruct (adapter :conc-name adapter-)
+  (padding :unsigned-long-long)
+  (next :pointer)
+  (name :string)
+  (first-unicast-address :pointer)
+  (first-anycast-address :pointer)
+  (first-multicast-address :pointer)
+  (first-dns-server-address :pointer)
+  (dns-suffix com:wstring)
+  (description com:wstring)
+  (friendly-name com:wstring)
+  (physical-address :uint8 :count 8)
+  (physical-address-length :ulong))
+
+(defun mac-str (octets)
+  (format NIL "~{~2,'0x~^:~}" (coerce octets 'list)))
+
+(defun ipv4-str (ipv4)
+  (format NIL "~d.~d.~d.~d"
+          (ldb (byte 8 0) ipv4)
+          (ldb (byte 8 8) ipv4)
+          (ldb (byte 8 16) ipv4)
+          (ldb (byte 8 24) ipv4)))
+
+(defun ipv6-str (ipv6)
+  (flet ((be->le (i)
+           (rotatef (ldb (byte 8 0) i) (ldb (byte 8 8) i))
+           i))
+    (format NIL "~x:~x:~x:~x:~x:~x:~x:~x"
+            (be->le (cffi:mem-aref ipv6 :uint16 0))
+            (be->le (cffi:mem-aref ipv6 :uint16 1))
+            (be->le (cffi:mem-aref ipv6 :uint16 2))
+            (be->le (cffi:mem-aref ipv6 :uint16 3))
+            (be->le (cffi:mem-aref ipv6 :uint16 4))
+            (be->le (cffi:mem-aref ipv6 :uint16 5))
+            (be->le (cffi:mem-aref ipv6 :uint16 6))
+            (be->le (cffi:mem-aref ipv6 :uint16 7)))))
+
+(define-implementation network-address (device)
+  (cffi:with-foreign-objects ((size :ulong))
+    (setf (cffi:mem-ref size :ulong) 0)
+    (cffi:foreign-funcall "GetAdaptersAddresses" :ulong 0 :ulong 0 :pointer (cffi:null-pointer) :pointer (cffi:null-pointer) :pointer size)
+    (cffi:with-foreign-objects ((adapter :char (cffi:mem-ref size :ulong)))
+      (when (/= 0 (cffi:foreign-funcall "GetAdaptersAddresses" :ulong 0 :ulong 0 :pointer (cffi:null-pointer) :pointer adapter :pointer size :ulong))
+        (fail "Failed to query adapters."))
+      (loop until (cffi:null-pointer-p adapter)
+            do (when (or (string-equal device (adapter-friendly-name adapter))
+                         (string-equal device (adapter-name adapter))
+                         (string-equal device (adapter-description adapter)))
+                 (let ((mac (mac-str (cffi:foreign-array-to-lisp (adapter-physical-address adapter) (list :array :uint8 (adapter-physical-address-length adapter)))))
+                       (addr (adapter-first-unicast-address adapter)) ipv4 ipv6)
+                   (loop until (cffi:null-pointer-p addr)
+                         do (let ((sockaddr (address-sockaddr addr)))
+                              (case (sockaddr4-family sockaddr)
+                                (2 (setf ipv4 (ipv4-str (sockaddr4-addr sockaddr))))
+                                (23 (setf ipv6 (ipv6-str (sockaddr6-addr sockaddr))))))
+                            (setf addr (address-next addr)))
+                   (return (values mac ipv4 ipv6))))
+               (setf adapter (adapter-next adapter))
+            finally (fail "No such device.")))))
+
+(cffi:defcstruct (system-power :conc-name system-power-)
+  (line-status :uint8)
+  (battery-flag :uint8)
+  (battery-life-percent :uint8)
+  (system-status-flag :uint8)
+  (battery-life-time :uint32)
+  (battery-full-life-time :uint32))
+
+(define-implementation machine-battery ()
+  (cffi:with-foreign-objects ((power '(:struct system-power)))
+    (windows-call "GetSystemPowerStatus" :pointer power :bool)
+    (let ((current (system-power-battery-life-percent power)))
+      (if (= 255 current)
+          (values 0d0 0d0 NIL)
+          (values (float current 0d0) 100d0
+                  (cond ((= 100 current)
+                         :full)
+                        ((logbitp 3 (system-power-battery-flag power))
+                         :charging)
+                        (T
+                         :discharging)))))))
