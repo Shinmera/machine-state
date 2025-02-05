@@ -188,10 +188,50 @@
   (declare (ignore device))
   (values 0 0 0))
 
-;; TODO: (define-protocol-fun machine-info () (vendor model os os-version))
-;; TODO: (define-protocol-fun machine-battery () (full total state))
-;; TODO: (define-protocol-fun machine-core-info () (vendor model arch arch-version))
-;; TODO: (define-protocol-fun process-info () (self cwd user group))
-;; TODO: (define-protocol-fun gpu-info () (vendor model))
-;; TODO: (define-protocol-fun network-info () (hostname))
-;; TODO: (define-protocol-fun network-address ((device string)) (mac ipv4 ipv6))
+(defun os-type ()
+  (or #+(or win32 windows) :WINDOWS
+      #+(and linux (not android)) :LINUX
+      #+(and (or darwin macos) (not ios) (not mach)) :DARWIN
+      #+android :ANDROID
+      #+ios :IOS
+      #+(or netbsd net-bsd) :NETBSD
+      #+(or freebsd free-bsd) :FREEBSD
+      #+(or openbsd open-bsd) :OPENBSD
+      #+beos :BEOS
+      #+solaris :SOLARIS
+      #+(or react reactos) :REACT
+      #+(or plan9 p9) :PLAN9
+      #+mezzano :MEZZANO
+      #+nx :NX))
+
+(define-protocol-fun machine-info () (string string symbol string)
+  (values "Unknown" "Unknown" (os-type) "Unknown"))
+
+(define-protocol-fun machine-battery () (single-float single-float symbol)
+  (values 0 0 NIL))
+
+(defun arch-type ()
+  (or #+(and x86 (not x86-64 amd64)) :X86
+      #+(or x86-64 amd64) :AMD64
+      #+(and (or arm armv7 armv6 armv5) (not arm64)) :ARM
+      #+arm64 :ARM64
+      #+(and riscv (not riscv64)) :RISCV
+      #+(or riscv64 rv64) :RISCV64
+      #+(or ppc power powerpc) :PPC
+      #+sparc :SPARC))
+
+(define-protocol-fun machine-core-info () (string string symbol string)
+  (values "Unknown" "Unknown" (arch-type) "Unknown"))
+
+(define-protocol-fun process-info () (pathname pathname string string)
+  (values *default-pathname-defaults* *default-pathname-defaults* "Unknown" "Unknown"))
+
+(define-protocol-fun gpu-info () (symbol string)
+  (values NIL "Unknown"))
+
+(define-protocol-fun network-info () ((or string null))
+  (values NIL))
+
+(define-protocol-fun network-address ((device string)) ((or string null) (or string null) (or string null))
+  (declare (ignore device))
+  (values NIL NIL NIL))
