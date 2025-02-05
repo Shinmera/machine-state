@@ -18,6 +18,9 @@
 (cffi:define-foreign-library advapi32
   (:windows "Advapi32.dll"))
 
+(cffi:define-foreign-library oleaut32
+  (:windows "OleAut32.dll"))
+
 (cffi:use-foreign-library psapi)
 (cffi:use-foreign-library ntdll)
 
@@ -440,16 +443,136 @@
   (platform-id :ulong)
   (csd-version :uint16 :count 128))
 
+(cffi:defcstruct (variant :conc-name variant-)
+  (type :ushort)
+  (reserved1 :uint16)
+  (reserved2 :uint16)
+  (reserved3 :uint16)
+  (value :pointer))
+
+(com:define-guid clsid-wbem-locator #x4590f811 #x1d3a #x11d0 #x89 #x1f #x00 #xaa #x00 #x4b #x2e #x24)
+(com:define-guid iid-iwbem-locator #xdc12a687 #x737f #x11cf #x88 #x4d #x00 #xaa #x00 #x4b #x2e #x24)
+
+(com:define-comstruct i-wbem-locator
+  (connect-server (network-resource com:wstring)
+                  (user com:wstring)
+                  (password com:wstring)
+                  (locale com:wstring)
+                  (security-flags :long)
+                  (authority com:wstring)
+                  (context :pointer)
+                  (namespace :pointer)))
+
+(com:define-comstruct i-wbem-services
+  open-namespace
+  cancel-async-call
+  query-object-sink
+  get-object
+  get-object-async
+  put-class
+  put-class-async
+  delete-class
+  delete-class-async
+  create-class-enum
+  create-class-enum-async
+  put-instance
+  put-instance-async
+  delete-instance
+  delete-instance-async
+  create-instance-enum
+  create-instance-enum-async
+  (exec-query (query-language com:wstring) (query com:wstring) (flags :long) (context :pointer) (enumerator :pointer))
+  exec-query-async
+  exec-notification-query
+  exec-notification-query-async
+  exec-method
+  exec-method-async)
+
+(com:define-comstruct i-enum-wbem-class-object
+  reset
+  (next (timeout :long) (count :ulong) (objects :pointer) (returned :pointer))
+  next-async
+  clone
+  skip)
+
+(com:define-comstruct i-wbem-class-object
+  get-qualifier-set
+  (get (name com:wstring) (flags :long) (value :pointer) (type :pointer) (flavor :pointer))
+  put
+  delete
+  get-names
+  begin-enumeration
+  next
+  end-enumeration
+  get-property-qualifier-set
+  clone
+  get-object-text
+  spawn-derived-class
+  spawn-instance
+  compare-to
+  get-property-origin
+  inherits-from
+  get-method
+  put-method
+  delete-method
+  begin-method-enumeration
+  next-method
+  end-method-enumeration
+  get-method-qualifier-set
+  get-method-origin)
+
+(defun wmi-query (query &rest props)
+  (unless (cffi:foreign-library-loaded-p 'oleaut32)
+    (cffi:load-foreign-library 'oleaut32))
+  (com:with-com (locator (com:create clsid-wbem-locator iid-iwbem-locator))
+    (cffi:with-foreign-objects ((value :pointer)
+                                (status :ulong)
+                                (variant '(:struct variant)))
+      (i-wbem-locator-connect-server locator "Root\\CIMV2" NIL NIL NIL 0 NIL (cffi:null-pointer) value)
+      (com:with-com (services (cffi:mem-ref value :pointer))
+        (cffi:foreign-funcall "CoSetProxyBlanket" :pointer services
+                                                  :uint32 10 #| RPC_C_AUTHN_WINNT |#
+                                                  :uint32 0  #| RPC_C_AUTHZ_NONE |#
+                                                  :pointer (cffi:null-pointer)
+                                                  :uint32 3 #| RPC_C_AUTHN_LEVEL_CALL |#
+                                                  :uint32 3 #| RPC_C_IMP_LEVEL_IMPERSONATE |#
+                                                  :pointer (cffi:null-pointer)
+                                                  :uint32 0 #| EOAC_NONE |#)
+        (i-wbem-services-exec-query services "WQL" query
+                                    (logior #x20 #| WBEM_FLAG_FORWARD_ONLY |#
+                                            #x10 #| WBEM_FLAG_RETURN_IMMEDIATELY |#)
+                                    (cffi:null-pointer) value)
+        (com:with-com (enumerator (cffi:mem-ref value :pointer))
+          (when (cffi:null-pointer-p enumerator)
+            (fail "WMI query failed."))
+          (i-enum-wbem-class-object-next enumerator -1 #| WBEM_INFINITE |# 1 value status)
+          (unless (= 0 (cffi:mem-ref status :ulong))
+            (com:with-com (object (cffi:mem-ref value :pointer))
+              (cffi:foreign-funcall "VariantInit" :pointer variant)
+              (loop for prop in props
+                    do (cffi:foreign-funcall "VariantClear" :pointer variant)
+                       (i-wbem-class-object-get object prop 0 variant (cffi:null-pointer) (cffi:null-pointer))
+                    collect (case (variant-type variant)
+                              (8 (com:wstring->string (variant-value variant))))))))))))
+
 (define-implementation machine-info ()
-  (cffi:with-foreign-objects ((version '(:struct version-info)))
-    (setf (version-info-size version) (cffi:foreign-type-size '(:struct version-info)))
-    (nt-call "RtlGetVersion" :pointer version :size)
-    (values "Unknown" ; TODO: Use the registry or WMI to get this info
-            "Unknown" ;   Cf: http://www.rohitab.com/discuss/topic/35915-win32-api-to-get-system-information/
+  (destructuring-bind (&optional vendor model) (wmi-query "SELECT * FROM Win32_BaseBoard" "Manufacturer" "Product")
+    (values vendor
+            model
             :windows
-            (format NIL "~d.~d-~a"
-                    (version-info-major version) (version-info-minor version)
-                    (version-info-build-number version)))))
+            (cffi:with-foreign-objects ((version '(:struct version-info)))
+              (setf (version-info-size version) (cffi:foreign-type-size '(:struct version-info)))
+              (nt-call "RtlGetVersion" :pointer version :size)
+              (format NIL "~d.~d-~a"
+                      (version-info-major version) (version-info-minor version)
+                      (version-info-build-number version))))))
+
+(define-implementation machine-core-info ()
+  (destructuring-bind (&optional vendor model version) (wmi-query "SELECT * FROM Win32_Processor" "Manufacturer" "Name" "Version")
+    (values (or vendor "Unknown")
+            (or model "Unknown")
+            (arch-type)
+            (or version "Unknown"))))
 
 (define-implementation network-info ()
   (cffi:with-foreign-object (hostname :char 512)
