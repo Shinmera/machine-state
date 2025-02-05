@@ -182,3 +182,6 @@
          (return (values (+ reads writes)
                          reads
                          writes)))))))
+
+(define-implementation self ()
+  (truename "/proc/self/exe"))

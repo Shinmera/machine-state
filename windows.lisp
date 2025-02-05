@@ -12,6 +12,12 @@
 (cffi:define-foreign-library iphlpapi
   (:windows "Iphlpapi.dll"))
 
+(cffi:define-foreign-library secur32
+  (:windows "Secur32.dll"))
+
+(cffi:define-foreign-library advapi32
+  (:windows "Advapi32.dll"))
+
 (cffi:use-foreign-library psapi)
 (cffi:use-foreign-library ntdll)
 
@@ -428,5 +434,24 @@
 
 (define-implementation network-info ()
   (cffi:with-foreign-object (hostname :char 512)
-    (posix-call "gethostname" :pointer hostname :size 512 :int)
+    (cffi:foreign-funcall "gethostname" :pointer hostname :size 512 :int)
     (cffi:foreign-string-to-lisp hostname :max-chars 512)))
+
+(define-implementation process-info ()
+  (unless (cffi:foreign-library-loaded-p 'advapi32)
+    (cffi:load-foreign-library 'advapi32))
+  (values
+   (cffi:with-foreign-object (name :uint16 1024)
+     (cffi:foreign-funcall "GetModuleFileNameW" :pointer (cffi:null-pointer) :pointer name :uint32 1024 :uint32)
+     (pathname-utils:parse-native-namestring (com:wstring->string name)))
+   (pathname-utils:parse-native-namestring
+    (cffi:with-foreign-object (path :uint16 1024)
+      (cffi:foreign-funcall "_wgetcwd" :pointer path :size 1024)
+      (com:wstring->string path))
+    :as :directory)
+   (cffi:with-foreign-objects ((name :uint16 512)
+                               (length :uint32))
+     (setf (cffi:mem-ref length :uint32) 512)
+     (windows-call "GetUserNameW" :pointer name :pointer length :bool)
+     (com:wstring->string name (cffi:mem-ref length :uint32)))
+   "Unknown"))
