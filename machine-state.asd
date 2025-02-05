@@ -11,16 +11,20 @@
   :components ((:file "package")
                (:file "protocol")
                (:file "windows" :if-feature (:or :windows :win32))
-               (:file "posix" :if-feature (:or :posix :linux :darwin :bsd))
+               (:file "posix" :if-feature (:and (:not :openbsd)
+                                                (:or :posix :linux :darwin :bsd)))
                (:file "darwin" :if-feature :darwin)
+               (:cffi-grovel-file "openbsd-grovel" :if-feature :openbsd)
+               (:file "openbsd" :if-feature :openbsd)
                (:file "linux" :if-feature :linux)
                (:file "nx" :if-feature :nx)
                (:file "mezzano" :if-feature :mezzano)
                (:file "documentation"))
-  :defsystem-depends-on (:trivial-features)
+  :defsystem-depends-on (:trivial-features
+                         (:feature :openbsd :cffi-grovel))
   :depends-on (:documentation-utils
                (:feature (:not :mezzano) :cffi)
-               :bordeaux-threads
+               (:feature (:not (:and :openbsd :32-bit)) :bordeaux-threads)
                :pathname-utils
                (:feature :windows :com-on))
   :in-order-to ((asdf:test-op (asdf:test-op :machine-state/test))))
