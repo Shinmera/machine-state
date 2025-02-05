@@ -274,3 +274,14 @@
                      ipv6))
         (cffi:foreign-funcall "freeifaddrs" :pointer ifaddrs)))))
 
+(define-implementation machine-battery ()
+  (values (with-open-file (o "/sys/class/power_supply/BAT0/energy_now" :if-does-not-exist NIL)
+            (if o (float (parse-integer (read-line o)) 0d0) 0d0))
+          (with-open-file (o "/sys/class/power_supply/BAT0/energy_full" :if-does-not-exist NIL)
+            (if o (float (parse-integer (read-line o)) 0d0) 0d0))
+          (with-open-file (o "/sys/class/power_supply/BAT0/status" :if-does-not-exist NIL)
+            (when o (let ((status (read-line o)))
+                      (cond ((string-equal status "charging") :charging)
+                            ((string-equal status "discharging") :discharging)
+                            ((string-equal status "full") :full)))))))
+

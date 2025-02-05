@@ -207,7 +207,7 @@
 (define-protocol-fun machine-info () (string string symbol string)
   (values "Unknown" "Unknown" (os-type) "Unknown"))
 
-(define-protocol-fun machine-battery () (single-float single-float symbol)
+(define-protocol-fun machine-battery () (double-float double-float symbol)
   (values 0 0 NIL))
 
 (defun arch-type ()
