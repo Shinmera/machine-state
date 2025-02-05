@@ -14,16 +14,15 @@
                (:file "posix" :if-feature (:and (:not :openbsd)
                                                 (:or :posix :linux :darwin :bsd)))
                (:file "darwin" :if-feature :darwin)
-               (:cffi-grovel-file "openbsd-grovel" :if-feature :openbsd)
                (:file "openbsd" :if-feature :openbsd)
                (:file "linux" :if-feature :linux)
                (:file "nx" :if-feature :nx)
                (:file "mezzano" :if-feature :mezzano)
                (:file "documentation"))
-  :defsystem-depends-on (:trivial-features
-                         (:feature :openbsd :cffi-grovel))
+  :defsystem-depends-on (:trivial-features)
   :depends-on (:documentation-utils
                (:feature (:not :mezzano) :cffi)
+               ;; 32bit SBCL does not support threads on OpenBSD
                (:feature (:not (:and :openbsd :32-bit)) :bordeaux-threads)
                :pathname-utils
                (:feature :windows :com-on))
