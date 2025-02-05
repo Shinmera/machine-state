@@ -183,5 +183,12 @@
                          reads
                          writes)))))))
 
+(define-implementation machine-info ()
+  (values (with-open-file (o "/sys/devices/virtual/dmi/id/board_vendor") (read-line o))
+          (with-open-file (o "/sys/devices/virtual/dmi/id/board_name") (read-line o))
+          :linux
+          (do-proc ((version :char 64)) ("/proc/version" "Linux version %s")
+            (return (cffi:foreign-string-to-lisp version :max-chars 64)))))
+
 (define-implementation self ()
   (truename "/proc/self/exe"))

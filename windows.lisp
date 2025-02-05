@@ -432,6 +432,25 @@
                                     (ifrow-out-octets row))))))))
         (cffi:foreign-funcall "FreeMibTable" :pointer table)))))
 
+(cffi:defcstruct (version-info :conc-name version-info-)
+  (size :ulong)
+  (major :ulong)
+  (minor :ulong)
+  (build-number :ulong)
+  (platform-id :ulong)
+  (csd-version :uint16 :count 128))
+
+(define-implementation machine-info ()
+  (cffi:with-foreign-objects ((version '(:struct version-info)))
+    (setf (version-info-size version) (cffi:foreign-type-size '(:struct version-info)))
+    (nt-call "RtlGetVersion" :pointer version :size)
+    (values "Unknown" ; TODO: Use the registry or WMI to get this info
+            "Unknown" ;   Cf: http://www.rohitab.com/discuss/topic/35915-win32-api-to-get-system-information/
+            :windows
+            (format NIL "~d.~d-~a"
+                    (version-info-major version) (version-info-minor version)
+                    (version-info-build-number version)))))
+
 (define-implementation network-info ()
   (cffi:with-foreign-object (hostname :char 512)
     (cffi:foreign-funcall "gethostname" :pointer hostname :size 512 :int)

@@ -21,3 +21,9 @@
     (float
      (/ (mezzano.supervisor:thread-run-time the-thread) (* 1000 1000))
      0d0)))
+
+(define-implementation machine-info ()
+  (values "Unknown"
+          "Unknown"
+          :mezzano
+          (lisp-implementation-version)))
