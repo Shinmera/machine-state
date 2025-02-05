@@ -178,7 +178,7 @@
                (writes :unsigned-long-long))
          ("/proc/net/dev" "%31s %llu %*u %*u %*u %*u %*u %*u %*u %llu %*u"
                           (fail "No such device."))
-       (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size (1- (length device)) :int))
+       (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size (min 32 (1- (length device))) :int))
          (return (values (+ reads writes)
                          reads
                          writes)))))))
@@ -211,3 +211,66 @@
 
 (define-implementation self ()
   (truename "/proc/self/exe"))
+
+(cffi:defcstruct (sockaddr4 :conc-name sockaddr4-)
+  (family :ushort)
+  (port :uint16)
+  (addr :uint32))
+
+(cffi:defcstruct (sockaddr6 :conc-name sockaddr6-)
+  (family :ushort)
+  (port :uint16)
+  (flow-info :uint32)
+  (addr :uint16 :count 8)
+  (scope-id :uint32))
+
+(cffi:defcstruct (ifaddrs :conc-name ifaddrs-)
+  (next :pointer)
+  (name :string)
+  (flags :uint)
+  (addr :pointer)
+  (netmask :pointer)
+  (bcast :pointer)
+  (data :pointer))
+
+(defun ipv4-str (ipv4)
+  (format NIL "~d.~d.~d.~d"
+          (ldb (byte 8 0) ipv4)
+          (ldb (byte 8 8) ipv4)
+          (ldb (byte 8 16) ipv4)
+          (ldb (byte 8 24) ipv4)))
+
+(defun ipv6-str (ipv6)
+  (flet ((be->le (i)
+           (rotatef (ldb (byte 8 0) i) (ldb (byte 8 8) i))
+           i))
+    (format NIL "~x:~x:~x:~x:~x:~x:~x:~x"
+            (be->le (cffi:mem-aref ipv6 :uint16 0))
+            (be->le (cffi:mem-aref ipv6 :uint16 1))
+            (be->le (cffi:mem-aref ipv6 :uint16 2))
+            (be->le (cffi:mem-aref ipv6 :uint16 3))
+            (be->le (cffi:mem-aref ipv6 :uint16 4))
+            (be->le (cffi:mem-aref ipv6 :uint16 5))
+            (be->le (cffi:mem-aref ipv6 :uint16 6))
+            (be->le (cffi:mem-aref ipv6 :uint16 7)))))
+
+(define-implementation network-address (device)
+  (cffi:with-foreign-object (ifaddrs :pointer)
+    (posix-call "getifaddrs" :pointer ifaddrs :int)
+    (let ((ifaddrs (cffi:mem-ref ifaddrs :pointer)) ipv4 ipv6)
+      (unwind-protect
+           (let ((ifaddrs ifaddrs))
+             (loop until (cffi:null-pointer-p ifaddrs)
+                   do (when (string= device (ifaddrs-name ifaddrs))
+                        (let ((address (ifaddrs-addr ifaddrs)))
+                          (case (sockaddr4-family address)
+                            (2 (setf ipv4 (ipv4-str (sockaddr4-addr address))))
+                            (10 (setf ipv6 (ipv6-str (sockaddr6-addr address)))))))
+                      (setf ifaddrs (ifaddrs-next ifaddrs)))
+             (values (with-open-file (o (format NIL "/sys/class/net/~a/address" device) :if-does-not-exist NIL)
+                       (if o (read-line o)
+                           (fail "No such device.")))
+                     ipv4
+                     ipv6))
+        (cffi:foreign-funcall "freeifaddrs" :pointer ifaddrs)))))
+
