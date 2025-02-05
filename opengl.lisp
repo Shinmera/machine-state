@@ -47,3 +47,11 @@
            (setf +gpu-time-query-object+ (first (gl:gen-queries 1)))))
     (gl:begin-query :time-elapsed +gpu-time-query-object+)
     (* (float +gpu-time+ 0d0) 1e-9)))
+
+(define-implementation gpu-info ()
+  (values (let ((vendor (gl:get-string :vendor)))
+            (cond ((search "intel" vendor :test #'char-equal) :intel)
+                  ((search "nvidia" vendor :test #'char-equal) :nvidia)
+                  ((search "ati" vendor :test #'char-equal) :amd)
+                  ((search "amd" vendor :test #'char-equal) :amd)))
+          (gl:get-string :renderer)))
