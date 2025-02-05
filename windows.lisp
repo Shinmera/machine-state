@@ -425,3 +425,8 @@
                                     (ifrow-in-octets row)
                                     (ifrow-out-octets row))))))))
         (cffi:foreign-funcall "FreeMibTable" :pointer table)))))
+
+(define-implementation network-info ()
+  (cffi:with-foreign-object (hostname :char 512)
+    (posix-call "gethostname" :pointer hostname :size 512 :int)
+    (cffi:foreign-string-to-lisp hostname :max-chars 512)))

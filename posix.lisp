@@ -162,3 +162,8 @@
                                           (:realtime 99)))
         (posix-call0 "pthread_setschedparam" :pointer handle :int policy :pointer param :int)))
     priority))
+
+(define-implementation network-info ()
+  (cffi:with-foreign-object (hostname :char 512)
+    (posix-call "gethostname" :pointer hostname :size 512 :int)
+    (cffi:foreign-string-to-lisp hostname :max-chars 512)))
