@@ -677,3 +677,25 @@
                    (return (values mac ipv4 ipv6))))
                (setf adapter (adapter-next adapter))
             finally (fail "No such device.")))))
+
+(cffi:defcstruct (system-power :conc-name system-power-)
+  (line-status :uint8)
+  (battery-flag :uint8)
+  (battery-life-percent :uint8)
+  (system-status-flag :uint8)
+  (battery-life-time :uint32)
+  (battery-full-life-time :uint32))
+
+(define-implementation machine-battery ()
+  (cffi:with-foreign-objects ((power '(:struct system-power)))
+    (windows-call "GetSystemPowerStatus" :pointer power :bool)
+    (let ((current (system-power-battery-life-percent power)))
+      (if (= 255 current)
+          (values 0d0 0d0 NIL)
+          (values (float current 0d0) 100d0
+                  (cond ((= 100 current)
+                         :full)
+                        ((logbitp 3 (system-power-battery-flag power))
+                         :charging)
+                        (T
+                         :discharging)))))))

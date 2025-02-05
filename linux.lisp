@@ -284,4 +284,3 @@
                       (cond ((string-equal status "charging") :charging)
                             ((string-equal status "discharging") :discharging)
                             ((string-equal status "full") :full)))))))
-
