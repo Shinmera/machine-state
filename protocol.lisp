@@ -187,3 +187,11 @@
 (define-protocol-fun network-io-bytes ((device T)) ((unsigned-byte 64) (unsigned-byte 64) (unsigned-byte 64))
   (declare (ignore device))
   (values 0 0 0))
+
+;; TODO: (define-protocol-fun machine-info () (vendor model os os-version))
+;; TODO: (define-protocol-fun machine-battery () (full total state))
+;; TODO: (define-protocol-fun machine-core-info () (vendor model arch arch-version))
+;; TODO: (define-protocol-fun process-info () (self cwd user group))
+;; TODO: (define-protocol-fun gpu-info () (vendor model))
+;; TODO: (define-protocol-fun network-info () (hostname))
+;; TODO: (define-protocol-fun network-address ((device string)) (mac ipv4 ipv6))
