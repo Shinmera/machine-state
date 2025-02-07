@@ -43,3 +43,11 @@
     (nxgl-call "nxgl_vram" :pointer free :pointer total)
     (values (cffi:mem-ref free :size)
             (cffi:mem-ref total :size))))
+
+(define-implementation process-info ()
+  (values (make-pathname :name "sbcl" :device "rom" :directory '(:absolute))
+          (make-pathname :device "tmp" :directory '(:absolute))
+          (cffi:with-foreign-object (nick :char 33)
+            (when (cffi:foreign-funcall "nxgl_username" :pointer nick :int 33 :bool)
+              (cffi:foreign-string-to-lisp nick :max-chars 33)))
+          "Unknown"))
