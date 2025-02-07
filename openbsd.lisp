@@ -128,12 +128,30 @@
 (defun group-from-group-id (user-id)
   (cffi:foreign-funcall "group_from_gid" :uint32 user-id :int 1 :string))
 
+(defun split-path (path &optional (delimiter #\:))
+  (let (paths start)
+    (do ((i 0 (1+ i)))
+        ((= i (length path)) (nreverse paths))
+      (when (char= (schar path i) delimiter)
+        (push (subseq path (or start 0) i) paths)
+        (setf start (1+ i))))))
+
+(defun resolve-executable (command)
+  (let ((path (cffi:foreign-funcall "getenv" :string "PATH" :string)))
+    (when path
+      (dolist (dir (split-path path #\:))
+        (let ((exec-path (make-pathname
+                          :defaults (pathname-utils:parse-native-namestring dir :as :directory)
+                          :name command)))
+          (when (probe-file exec-path)
+            (return-from resolve-executable exec-path)))))))
+
 (define-implementation process-info ()
   (with-current-proc (proc)
     (values
-     ;; TODO: Try to get the full path? Maybe manually check the PATH variable?
-     (let ((command (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name)))
-       (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp command)))
+     (let ((command (cffi:foreign-string-to-lisp
+                     (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name))))
+       (or (resolve-executable command) command)) ;; Make an attempt to get the absolute path
      (getcwd)
      (user-from-user-id (kinfo-proc-user-id proc))
      (group-from-group-id (kinfo-proc-group-id proc)))))
@@ -474,7 +492,7 @@
   (let ((names nil))
     (do-ifaddrs (ifaddr)
       (pushnew (ifaddrs-name ifaddr) names :test #'string=))
-    names))
+    (nreverse names)))
 
 (defconstant +af-inet+ 2)
 (defconstant +af-inet6+ 24)
