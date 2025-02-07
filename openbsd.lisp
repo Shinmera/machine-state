@@ -227,12 +227,12 @@
     (cffi:mem-ref online-cores :int)))
 
 (cffi:defcstruct (clockinfo :size 16 :conc-name clockinfo-)
-  (hz :int :offset 0)) ;; int hz
+  (hz :int))
 
 (defconstant +cpustates+ 6)
 
 (cffi:defcstruct (cpustats :size 56 :conc-name cpustats-)
-  (times (:array :uint64 #.+cpustates+) :offset 0))
+  (times (:array :uint64 #.+cpustates+))) ;; cs_time
 
 (defun core-time (core)
   (cffi:with-foreign-object (cpustats '(:struct cpustats))
@@ -269,7 +269,7 @@
 
 (defconstant +sensor-name-size+ 16)
 (cffi:defcstruct (sensordev :size 116 :conc-name sensordev-)
-  (name (:array :char #.+sensor-name-size+) :offset 4)) ;;
+  (name (:array :char #.+sensor-name-size+) :offset 4)) ;; xname
 
 (defconstant +enoent+ 2)
 (defconstant +enxio+ 6)
@@ -322,12 +322,9 @@
             (arch-type)
             (sysctl-string (list +ctl-hw+ +hw-machine+) 32))))
 
-
-;;; Copied from linux.lisp
-
-(cffi:defcstruct (stat :size 108 :conc-name stat-)
-  (dev     :uint64 :offset 0)
-  (mode    :uint32 :offset 24))
+(cffi:defcstruct (stat :size 128 :conc-name stat-)
+  (mode    :uint32 :offset 0) ;; st_mode
+  (dev     :uint64 :offset 4)) ;; st_dev
 
 (defun pathname-force-file (path)
   (cond
@@ -353,26 +350,34 @@
                        path)))))
     (pathname-force-file (rec (truename path)))))
 
-;;;
-
 (defconstant +mnt-wait+ 1)
 (defconstant +mnt-nowait+ 2)
 (defconstant +mfsnamelen+ 16)
 (defconstant +mnamelen+ 90)
 
+#+32-bit
 (cffi:defcstruct (statfs :size 564 :conc-name statfs-)
   (block-size :uint32 :offset 4)
   (blocks :uint64 :offset 12)
-  (free-blocks :uint64 :offset 20) ;; All free blocks
   (available-blocks :int64 :offset 28) ;; Blocks available to non-superuser
   (synchronous-writes :uint64 :offset 60)
   (synchronous-reads :uint64 :offset 68)
   (asynchronous-writes :uint64 :offset 76)
   (asynchronous-reads :uint64 :offset 84)
-  (max-filename-size :uint32 :offset 100)
-  (filesystem-type (:array :char #.+mfsnamelen+) :offset 116)
   (mountpoint (:array :char #.+mnamelen+) :offset 132)
   (device (:array :char #.+mnamelen+) :offset 222))
+
+#+64-bit
+(cffi:defcstruct (statfs :size 568 :conc-name statfs-)
+  (block-size :uint32 :offset 4)
+  (blocks :uint64 :offset 16)
+  (available-blocks :int64 :offset 32) ;; Blocks available to non-superuser
+  (synchronous-writes :uint64 :offset 64)
+  (synchronous-reads :uint64 :offset 72)
+  (asynchronous-writes :uint64 :offset 80)
+  (asynchronous-reads :uint64 :offset 88)
+  (mountpoint (:array :char #.+mnamelen+) :offset 136)
+  (device (:array :char #.+mnamelen+) :offset 226))
 
 (defun %getfsstat (buf &optional (count 0) (wait? t))
   (let* ((flags (if wait? +mnt-wait+ +mnt-nowait+))
