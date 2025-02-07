@@ -181,6 +181,29 @@
     (posix-call "setpriority" :int +prio-process+ :uint32 (getpid) :int prio :int))
   (process-priority)) ;; Get the actual priority
 
+(defun getcwd ()
+  (pathname-utils:parse-native-namestring
+   (cffi:with-foreign-object (path :char 1024)
+     (cffi:foreign-funcall "getcwd" :pointer path :size 1024)
+     (cffi:foreign-string-to-lisp path :max-chars 1024))
+   :as :directory))
+
+(defun user-from-user-id (user-id)
+  (cffi:foreign-funcall "user_from_uid" :uint32 user-id :int 1 :string))
+
+(defun group-from-group-id (user-id)
+  (cffi:foreign-funcall "group_from_gid" :uint32 user-id :int 1 :string))
+
+(define-implementation process-info ()
+  (with-current-proc (proc)
+    (values
+     ;; TODO: Try to get the full path? Maybe manually check the PATH variable?
+     (let ((command (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name)))
+       (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp command)))
+     (getcwd)
+     (user-from-user-id (kinfo-proc-user-id proc))
+     (group-from-group-id (kinfo-proc-group-id proc)))))
+
 (defun %%sysctl (name namelen old oldlen new newlen)
   (cffi:foreign-funcall "sysctl" (:pointer :int) name :uint namelen :pointer old (:pointer :size) oldlen :pointer new :size newlen :int))
 
@@ -280,6 +303,73 @@
         (destructuring-bind (user nice sys spin intr idle) (coerce values 'list)
           (values (conv idle)
                   (conv (+ user nice sys spin intr idle))))))))
+
+;;;; Reference:
+;;;; https://github.com/openbsd/src/blob/master/sys/sys/sensors.h
+;;;; https://github.com/openbsd/src/blob/master/sbin/sysctl/sysctl.c#L2554
+
+(defconstant +sensor-type-volts-dc+ 2)
+(defconstant +sensor-type-amphour+ 8)
+(defconstant +sensor-type-integer+ 10)
+
+(cffi:defcstruct (sensor :size 68 :conc-name sensor-)
+  (value :int64 :offset 44))
+
+(defconstant +sensor-name-size+ 16)
+(cffi:defcstruct (sensordev :size 116 :conc-name sensordev-)
+  (name (:array :char #.+sensor-name-size+) :offset 4)) ;;
+
+(defconstant +enoent+ 2)
+(defconstant +enxio+ 6)
+
+(defun find-sensor-number (name &optional (dev 0))
+  (cffi:with-foreign-object (sensordev '(:struct sensordev))
+    (let ((ret (sysctl-unchecked (list +ctl-hw+ +hw-sensors+ dev) sensordev (sizeof '(:struct sensordev)))))
+      (when (= -1 ret)
+        (return-from find-sensor-number
+          (if (= +enxio+ (errno))
+              (find-sensor-number name (1+ dev))
+              nil)))
+      (let ((sensor-name (cffi:foreign-slot-pointer sensordev '(:struct sensordev) 'name)))
+        (if (= 0 (cffi:foreign-funcall "strncmp" :pointer sensor-name :string name :size +sensor-name-size+ :int))
+            dev
+            (find-sensor-number name (1+ dev)))))))
+
+(defun find-sensor-value (device sensor-type sensor-index)
+  (cffi:with-foreign-object (sensor '(:struct sensor))
+    (sysctl (list +ctl-hw+ +hw-sensors+ device sensor-type sensor-index)
+            sensor
+            (sizeof '(:struct sensor)))
+    (sensor-value sensor)))
+
+(define-implementation machine-battery ()
+  (let ((battery-n (find-sensor-number "acpibat0")))
+    (if battery-n
+        (let ((last-full-capacity (find-sensor-value battery-n +sensor-type-amphour+ 0))
+              (remaining-capacity (find-sensor-value battery-n +sensor-type-amphour+ 3))
+              (state (find-sensor-value battery-n +sensor-type-integer+ 0)))
+          (values (float remaining-capacity 0.0d0)
+                  (float last-full-capacity 0.0d0)
+                  (case state
+                    (0 :full)
+                    (1 :discharging)
+                    (2 :charging))))
+        (values 0.0d0 0.0d0 nil))))
+
+(define-implementation machine-info ()
+  (values
+   (sysctl-string (list +ctl-hw+ +hw-vendor+) 128)
+   (sysctl-string (list +ctl-hw+ +hw-product+) 128)
+   :openbsd
+   (sysctl-string (list +ctl-kern+ +kern-osrelease+) 16)))
+
+(define-implementation machine-core-info ()
+  (let ((processor (sysctl-string (list +ctl-hw+ +hw-model+) 128)))
+    (values processor
+            processor ;; There doesn't seem to be a separation between those
+            (arch-type)
+            (sysctl-string (list +ctl-hw+ +hw-machine+) 32))))
+
 
 ;;; Copied from linux.lisp
 
@@ -496,103 +586,16 @@
             ((= +af-link+ address-family)
              (unless mac
                (let* ((start (sockaddr-dl-interface-name-length sockaddr))
-                      (end (+ start (sockaddr-dl-address-len sockaddr))))
-                 (setf mac (macaddr->string (sockaddr-dl-data sockaddr) :start start :end end)))))))))
+                      (end (+ start (sockaddr-dl-address-length sockaddr))))
+                 (when (> (- end start) 0)
+                   (setf mac (macaddr->string (sockaddr-dl-data sockaddr) :start start :end end))))))))))
     (values ipv4 ipv6 mac)))
-
-(define-implementation network-io-bytes (device) 0)
-
-;;;; Reference:
-;;;; https://github.com/openbsd/src/blob/master/sys/sys/sensors.h
-;;;; https://github.com/openbsd/src/blob/master/sbin/sysctl/sysctl.c#L2554
-
-(defconstant +sensor-type-volts-dc+ 2)
-(defconstant +sensor-type-amphour+ 8)
-(defconstant +sensor-type-integer+ 10)
-
-(cffi:defcstruct (sensor :size 68 :conc-name sensor-)
-  (value :int64 :offset 44))
-
-(defconstant +sensor-name-size+ 16)
-(cffi:defcstruct (sensordev :size 116 :conc-name sensordev-)
-  (name (:array :char #.+sensor-name-size+) :offset 4)) ;;
-
-(defconstant +enoent+ 2)
-(defconstant +enxio+ 6)
-
-(defun find-sensor-number (name &optional (dev 0))
-  (cffi:with-foreign-object (sensordev '(:struct sensordev))
-    (let ((ret (sysctl-unchecked (list +ctl-hw+ +hw-sensors+ dev) sensordev (sizeof '(:struct sensordev)))))
-      (when (= -1 ret)
-        (return-from find-sensor-number
-          (if (= +enxio+ (errno))
-              (find-sensor-number name (1+ dev))
-              nil)))
-      (let ((sensor-name (cffi:foreign-slot-pointer sensordev '(:struct sensordev) 'name)))
-        (if (= 0 (cffi:foreign-funcall "strncmp" :pointer sensor-name :string name :size +sensor-name-size+ :int))
-            dev
-            (find-sensor-number name (1+ dev)))))))
-
-(defun find-sensor-value (device sensor-type sensor-index)
-  (cffi:with-foreign-object (sensor '(:struct sensor))
-    (sysctl (list +ctl-hw+ +hw-sensors+ device sensor-type sensor-index)
-            sensor
-            (sizeof '(:struct sensor)))
-    (sensor-value sensor)))
-
-(define-implementation machine-battery ()
-  (let ((battery-n (find-sensor-number "acpibat0")))
-    (if battery-n
-        (let ((last-full-capacity (find-sensor-value battery-n +sensor-type-amphour+ 0))
-              (remaining-capacity (find-sensor-value battery-n +sensor-type-amphour+ 3))
-              (state (find-sensor-value battery-n +sensor-type-integer+ 0)))
-          (values remaining-capacity
-                  last-full-capacity
-                  (case state
-                    (0 :full)
-                    (1 :discharging)
-                    (2 :charging))))
-        (values 0 0 nil))))
-
-(define-implementation machine-info ()
-  (values
-   (sysctl-string (list +ctl-hw+ +hw-vendor+) 128)
-   (sysctl-string (list +ctl-hw+ +hw-product+) 128)
-   :openbsd
-   (sysctl-string (list +ctl-kern+ +kern-osrelease+) 16)))
-
-(define-implementation machine-core-info ()
-  (let ((processor (sysctl-string (list +ctl-hw+ +hw-model+) 128)))
-    (values processor
-            processor ;; There doesn't seem to be a separation between those
-            nil
-            (sysctl-string (list +ctl-hw+ +hw-machine+) 32))))
-
-(defun getcwd ()
-  (pathname-utils:parse-native-namestring
-   (cffi:with-foreign-object (path :char 1024)
-     (cffi:foreign-funcall "getcwd" :pointer path :size 1024)
-     (cffi:foreign-string-to-lisp path :max-chars 1024))
-   :as :directory))
-
-(defun user-from-user-id (user-id)
-  (cffi:foreign-funcall "user_from_uid" :uint32 user-id :int 1 :string))
-
-(defun group-from-group-id (user-id)
-  (cffi:foreign-funcall "group_from_gid" :uint32 user-id :int 1 :string))
-
-(define-implementation process-info ()
-  (with-current-proc (proc)
-    (values
-     ;; TODO: Try to get the full path? Maybe manually check the PATH variable?
-     (let ((command (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name)))
-       (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp command)))
-     (getcwd)
-     (user-from-user-id (kinfo-proc-user-id proc))
-     (group-from-group-id (kinfo-proc-group-id proc)))))
-
-(define-implementation gpu-info ()
-  (values nil "Unknown"))
 
 (define-implementation network-info ()
   (sysctl-string (list +ctl-kern+ +kern-hostname+) 255))
+
+(define-implementation network-io-bytes (device)
+  (values 0 0 0))
+
+(define-implementation gpu-info ()
+  (values nil "Unknown"))
