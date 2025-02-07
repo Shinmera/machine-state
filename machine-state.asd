@@ -23,7 +23,7 @@
   :depends-on (:documentation-utils
                (:feature (:not :mezzano) :cffi)
                ;; 32bit SBCL does not support threads on OpenBSD
-               (:feature (:not (:and :openbsd :32-bit)) :bordeaux-threads)
+               (:feature (:not (:and :sbcl :openbsd :32-bit)) :bordeaux-threads)
                :pathname-utils
                (:feature :windows :com-on))
   :in-order-to ((asdf:test-op (asdf:test-op :machine-state/test))))
