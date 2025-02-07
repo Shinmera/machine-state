@@ -7,6 +7,7 @@
 (defconstant +kern-clockrate+ 12)
 (defconstant +kern-boottime+ 21)
 (defconstant +kern-cptime+ 40)
+(defconstant +kern-proc+ 66)
 (defconstant +kern-cptime2+ 71)
 (defconstant +kern-cpustats+ 85)
 
@@ -47,12 +48,6 @@
 (defun getpid ()
   (cffi:foreign-funcall "getpid" :long))
 
-;;;; https://github.com/openbsd/src/tree/master/lib/libkvm
-;;;; https://github.com/openbsd/src/blob/master/include/kvm.h
-(cffi:define-foreign-library kvm (:openbsd "libkvm.so"))
-(cffi:use-foreign-library kvm)
-
-(defconstant +kvm-no-files+ (- (ash 1 31)))
 (defconstant +posix2-line-max+ 2048)
 
 ;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L363
@@ -60,95 +55,34 @@
 
 ;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L370
 (cffi:defcstruct (kinfo-proc :size 644 :conc-name kinfo-proc-)
-  (user-id :uint32 :offset 128) ;; u_int32_t p_uid
-  (group-id :uint32 :offset 136) ;; u_int32_t p_gid
-  (nice :uint8 :offset 307) ;; u_int8_t p_nice
-  (command-name (:array :char #.+ki-maxcomlen+) :offset 312) ;; char p_comm[KI_MAXCOMLEN]
-  (resident-set-size :int32 :offset 384) ;; int32_t p_vm_rssize
-  ;; (real-time-seconds :uint32 :offset 220) ;; u_int32_t p_rtime_sec
-  ;; (real-time-microseconds :uint32 :offset 224) ;; u_int32_t p_rtime_usec
-  (user-time-seconds :uint32 :offset 420) ;; u_int32_t p_utime_sec
-  (user-time-microseconds :uint32 :offset 424)) ;; u_int32_t p_utime_sec
+  (user-id :uint32 :offset 128) ;; p_uid
+  (group-id :uint32 :offset 136) ;; p_gid
+  (nice :uint8 :offset 307) ;; p_nice
+  (command-name (:array :char #.+ki-maxcomlen+) :offset 312) ;; p_comm
+  (resident-set-size :int32 :offset 384) ;; p_vm_rssize
+  (user-time-seconds :uint32 :offset 420) ;; p_uutime_sec
+  (user-time-microseconds :uint32 :offset 424)) ;; p_uutime_usec
 
 ;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L752
 (cffi:defcstruct (kinfo-file :size 624 :conc-name kinfo-file-)
-  (read-bytes :uint64 :offset 96)
-  (written-bytes :uint64 :offset 104))
-
-(defun kvm-openfiles ()
-  (cffi:with-foreign-object (errbuf :char +posix2-line-max+)
-    (let ((ret (cffi:foreign-funcall
-                "kvm_openfiles"
-                :pointer (cffi:null-pointer)
-                :pointer (cffi:null-pointer)
-                :pointer (cffi:null-pointer)
-                :int +kvm-no-files+
-                :pointer errbuf
-                :pointer #| kvm_t* |#)))
-      (when (cffi:null-pointer-p ret)
-        (fail (cffi:foreign-string-to-lisp errbuf :max-chars +posix2-line-max+)))
-      ret)))
-
-(defun kvm-fail (kvm &optional (function nil))
-  (fail (cffi:foreign-funcall "kvm_geterr" :pointer kvm :string) function))
-
-(defmacro with-kvm ((kvm) &body body)
-  `(let ((,kvm (kvm-openfiles)))
-     (unwind-protect
-          (progn ,@body)
-       (posix-call "kvm_close" :pointer ,kvm :int))))
+  (read-bytes :uint64 :offset 96) ;; f_rbytes
+  (written-bytes :uint64 :offset 104)) ;; f_wbytes
 
 (defconstant +kern-file-bypid+ 2)
 
 ;;;; I could not find an API that show TOTAL process IO, there doesn't seem to be any tools that can do this either,
 ;;;; best I found is IO status of currently opened files
 (define-implementation process-io-bytes ()
-  (values 0 0 0)
-  ;; (cffi:with-foreign-objects ((count :int))
-  ;;   (with-kvm (kvm)
-  ;;     (let ((files (cffi:mem-aptr
-  ;;                   (cffi:foreign-funcall
-  ;;                    "kvm_getfiles"
-  ;;                    :pointer kvm
-  ;;                    :int +kern-file-bypid+
-  ;;                    :int (getpid)
-  ;;                    :size (sizeof '(:struct kinfo-file))
-  ;;                    :pointer count
-  ;;                    :pointer)
-  ;;                   '(:struct kinfo-file))))
-
-  ;;       (when (cffi:null-pointer-p files)
-  ;;         (kvm-fail kvm "kvm_getfiles"))
-
-  ;;       (loop
-  ;;         for i below (cffi:mem-ref count :int)
-  ;;         for file = (cffi:mem-aptr files '(:struct kinfo-file) i)
-  ;;         summing (kinfo-file-read-bytes file) into read
-  ;;         summing (kinfo-file-written-bytes file) into written
-  ;;         finally (return (values (+ read written)
-  ;;                                 read
-  ;;                                 written))))))
-  )
+  (values 0 0 0))
 
 (defconstant +kern-proc-pid+ 1)
 
 (defmacro with-current-proc ((proc) &body body)
-  (let ((count (gensym)) (kvm (gensym)))
-    `(cffi:with-foreign-object (,count :int)
-       (with-kvm (,kvm)
-         (let ((,proc (cffi:mem-aptr
-                       (cffi:foreign-funcall
-                        "kvm_getprocs"
-                        :pointer ,kvm
-                        :int +kern-proc-pid+
-                        :int (getpid)
-                        :size (sizeof '(:struct kinfo-proc))
-                        :pointer ,count
-                        :pointer)
-                       '(:struct kinfo-proc))))
-           (when (cffi:null-pointer-p ,proc)
-             (kvm-fail ,kvm "kvm_getprocs"))
-           ,@body)))))
+  `(cffi:with-foreign-object (,proc '(:struct kinfo-proc))
+     (sysctl (list +ctl-kern+ +kern-proc+ +kern-proc-pid+ (getpid) (sizeof '(:struct kinfo-proc)) 1)
+             ,proc
+             (sizeof '(:struct kinfo-proc)))
+     ,@body))
 
 (define-implementation process-room ()
   (with-current-proc (proc)
