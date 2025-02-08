@@ -71,8 +71,7 @@
   (read-bytes :uint64 :offset 96) ;; f_rbytes
   (written-bytes :uint64 :offset 104)) ;; f_wbytes
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun getpid () (cffi:foreign-funcall "getpid" :long))) ;; pid_t
+(defun getpid () (cffi:foreign-funcall "getpid" :long)) ;; pid_t
 
 (defmacro with-current-process ((proc) &body body)
   `(cffi:with-foreign-object (,proc '(:struct kinfo-proc))
@@ -121,11 +120,12 @@
 
 #+thread-support
 (progn
-  (defmacro with-threads ((thread &optional (pid (getpid))) &body body)
-    (let ((mib (gensym)) (i (gensym)) (nproc (gensym)) (procs (gensym)) (kinfo-proc-size (gensym)))
+  (defmacro with-threads ((thread &optional pid) &body body)
+    (let ((mib (gensym)) (%pid (gensym)) (i (gensym)) (nproc (gensym)) (procs (gensym)) (kinfo-proc-size (gensym)))
       ;; Call sysctl once to find how many bytes will be returned
-      `(let* ((,kinfo-proc-size (sizeof '(:struct kinfo-proc)))
-              (,mib (list +ctl-kern+ +kern-proc+ (logior +kern-proc-pid+ +kern-proc-show-threads+) ,pid ,kinfo-proc-size 0))
+      `(let* ((,%pid (or ,pid (getpid)))
+              (,kinfo-proc-size (cffi:foreign-type-size '(:struct kinfo-proc)))
+              (,mib (list +ctl-kern+ +kern-proc+ (logior +kern-proc-pid+ +kern-proc-show-threads+) ,%pid ,kinfo-proc-size 0))
               (,nproc (ceiling (/ (sysctl ,mib nil) ,kinfo-proc-size))))
          (rplaca (last ,mib) ,nproc)
          (cffi:with-foreign-object (,procs '(:struct kinfo-proc) ,nproc)
