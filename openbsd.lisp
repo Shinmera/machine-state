@@ -2,6 +2,7 @@
 
 ;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L103
 (defconstant +ctl-kern+ 1)
+(defconstant +kern-proc-pid+ 1)
 (defconstant +kern-osrelease+ 2)
 (defconstant +kern-hostname+ 10)
 (defconstant +kern-clockrate+ 12)
@@ -41,6 +42,9 @@
 (defun strerror (&optional (errno (errno)))
   (cffi:foreign-funcall "strerror" :int errno :string))
 
+(defun strncmp-lisp (foreign-str lisp-str &key (max-chars (length lisp-str)))
+  (= 0 (cffi:foreign-funcall "strncmp" :pointer foreign-str :string lisp-str :size max-chars :int)))
+
 (defmacro posix-call (function &rest args)
   `(let ((val (cffi:foreign-funcall ,function ,@args)))
      (if (< val 0)
@@ -62,57 +66,15 @@
   (thread-id :int32 :offset 608) ;; p_tid
   (thread-name (:array :char #.+ki-maxcomlen+) :offset 624)) ;; p_name
 
-
 ;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L752
 (cffi:defcstruct (kinfo-file :size 624 :conc-name kinfo-file-)
   (read-bytes :uint64 :offset 96) ;; f_rbytes
   (written-bytes :uint64 :offset 104)) ;; f_wbytes
 
-(defconstant +kern-file-bypid+ 2)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun getpid () (cffi:foreign-funcall "getpid" :long))) ;; pid_t
 
-;;;; I could not find an API that show TOTAL process IO, there doesn't seem to be any tools that can do this either,
-;;;; best I found is IO status of currently opened files
-(define-implementation process-io-bytes ()
-  (values 0 0 0))
-
-(defconstant +kern-proc-pid+ 1)
-
-(defun getpid () (cffi:foreign-funcall "getpid" :long)) ;; pid_t
-
-#+thread-support
-(defun get-thread-id () (cffi:foreign-funcall "getthrid" :long)) ;; pid_t
-
-#+thread-support
-(defmacro with-threads ((thread &optional (pid (getpid))) &body body)
-  (let ((mib (gensym)) (i (gensym)) (nproc (gensym)) (procs (gensym)) (kinfo-proc-size (gensym)))
-    `(let* ((,kinfo-proc-size (sizeof '(:struct kinfo-proc)))
-            (,mib (list +ctl-kern+ +kern-proc+ (logior +kern-proc-pid+ +kern-proc-show-threads+) ,pid ,kinfo-proc-size 0))
-            (,nproc (ceiling (/ (sysctl ,mib nil) ,kinfo-proc-size))))
-       (rplaca (last ,mib) ,nproc)
-       (cffi:with-foreign-object (,procs '(:struct kinfo-proc) ,nproc)
-         (sysctl ,mib ,procs (* (sizeof '(:struct kinfo-proc)) ,nproc))
-         (dotimes (,i ,nproc)
-           (let ((,thread (cffi:mem-aptr ,procs '(:struct kinfo-proc) ,i)))
-             (when (> (kinfo-proc-thread-id ,thread) 1)
-               ,@body)))))))
-
-#+thread-support
-(defmacro with-current-thread ((thread) &body body)
-  (let ((tid (gensym)))
-    `(let ((,tid (get-thread-id)))
-       (with-threads (,thread)
-         (when (= ,tid (kinfo-proc-thread-id ,thread))
-           (return ,@body))))))
-
-#+thread-support
-(defmacro with-current-thread-handle ((handle thread &optional (default 0)) &body body)
-  `(if (or (eql ,thread T)
-           (eql ,thread (bt:current-thread)))
-       (with-current-thread (,handle)
-         ,@body)
-       ,default))
-
-(defmacro with-current-proc ((proc) &body body)
+(defmacro with-current-process ((proc) &body body)
   `(cffi:with-foreign-object (,proc '(:struct kinfo-proc))
      (sysctl (list +ctl-kern+ +kern-proc+ +kern-proc-pid+ (getpid) (sizeof '(:struct kinfo-proc)) 1)
              ,proc
@@ -120,23 +82,15 @@
      ,@body))
 
 (define-implementation process-room ()
-  (with-current-proc (proc)
+  (with-current-process (proc)
     (let ((page-size (cffi:foreign-funcall "getpagesize" :int)))
       (* page-size (kinfo-proc-resident-set-size proc)))))
 
+;;;; These functions are shared between the processes and threads impls
 ;;;; User time only, will differ from output of PS or TOP
 (defun %process-time (kinfo-proc)
   (+ (kinfo-proc-user-time-seconds kinfo-proc)
      (/ (kinfo-proc-user-time-microseconds kinfo-proc) 1000000.0d0)))
-
-(define-implementation process-time ()
-  (with-current-proc (proc)
-    (%process-time proc)))
-
-#+thread-support
-(define-implementation thread-time (thread)
-  (with-current-thread-handle (handle thread 0.0d0)
-    (%process-time handle)))
 
 (defconstant +prio-process+ 0)
 (defun %process-priority (kinfo-proc)
@@ -147,14 +101,13 @@
           ((< value +8) :low)
           (T :idle))))
 
-(define-implementation process-priority ()
-  (with-current-proc (proc)
-    (%process-priority proc)))
+(define-implementation process-time ()
+  (with-current-process (proc)
+    (%process-time proc)))
 
-#+thread-support
-(define-implementation thread-priority (thread)
-  (with-current-thread-handle (handle thread :normal)
-    (%process-priority handle)))
+(define-implementation process-priority ()
+  (with-current-process (proc)
+    (%process-priority proc)))
 
 (define-implementation (setf process-priority) (priority)
   (let ((prio (ecase priority
@@ -166,18 +119,42 @@
     (posix-call "setpriority" :int +prio-process+ :uint32 (getpid) :int prio :int))
   (process-priority)) ;; Get the actual priority
 
-;;;; Unsupported: https://github.com/openbsd/src/blob/master/include/unistd.h#L100
-#+nil
-(define-implementation (setf thread-priority) (thread priority) :normal)
+#+thread-support
+(progn
+  (defmacro with-threads ((thread &optional (pid (getpid))) &body body)
+    (let ((mib (gensym)) (i (gensym)) (nproc (gensym)) (procs (gensym)) (kinfo-proc-size (gensym)))
+      ;; Call sysctl once to find how many bytes will be returned
+      `(let* ((,kinfo-proc-size (sizeof '(:struct kinfo-proc)))
+              (,mib (list +ctl-kern+ +kern-proc+ (logior +kern-proc-pid+ +kern-proc-show-threads+) ,pid ,kinfo-proc-size 0))
+              (,nproc (ceiling (/ (sysctl ,mib nil) ,kinfo-proc-size))))
+         (rplaca (last ,mib) ,nproc)
+         (cffi:with-foreign-object (,procs '(:struct kinfo-proc) ,nproc)
+           (sysctl ,mib ,procs (* (sizeof '(:struct kinfo-proc)) ,nproc))
+           (dotimes (,i ,nproc)
+             (let ((,thread (cffi:mem-aptr ,procs '(:struct kinfo-proc) ,i)))
+               (when (> (kinfo-proc-thread-id ,thread) 1)
+                 ,@body)))))))
 
-#+nil
-(define-implementation thread-core-mask (thread) (1- (ash 1 (min 64 (machine-cores)))))
+  (defmacro with-current-thread ((thread) &body body)
+    (let ((tid (gensym)))
+      `(let ((,tid (cffi:foreign-funcall "getthrid" :long)))
+         (with-threads (,thread)
+           (when (= ,tid (kinfo-proc-thread-id ,thread))
+             (return ,@body))))))
 
-(defun user-from-user-id (user-id)
-  (cffi:foreign-funcall "user_from_uid" :uint32 user-id :int 1 :string))
+  (defmacro with-current-thread-handle ((handle thread &optional (default 0)) &body body)
+    `(if (or (eql ,thread T)
+             (eql ,thread (bt:current-thread)))
+         (with-current-thread (,handle)
+           ,@body)
+         ,default))
 
-(defun group-from-group-id (user-id)
-  (cffi:foreign-funcall "group_from_gid" :uint32 user-id :int 1 :string))
+  (define-implementation thread-time (thread)
+    (with-current-thread-handle (handle thread 0.0d0)
+      (%process-time handle))))
+
+;;;; process-io-bytes, thread-priority and thread-core-mask are unsupported
+;;;; Reference: https://github.com/openbsd/src/blob/master/include/unistd.h#L100
 
 (defun split-path (path &optional (delimiter #\:))
   (let (paths start)
@@ -198,23 +175,31 @@
             (return-from resolve-executable exec-path)))))))
 
 (define-implementation process-info ()
-  (with-current-proc (proc)
-    (let ((cwd (cffi:with-foreign-object (cwd :char 1024)
-                 (sysctl (list +ctl-kern+ +kern-proc-cwd+ (getpid)) cwd 1024)
-                 (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp cwd) :as :directory)))
-          (command (let ((command (cffi:foreign-string-to-lisp
-                                   (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name))))
-                     (or (resolve-executable command) command))))
-      (values command
-              cwd
-              (user-from-user-id (kinfo-proc-user-id proc))
-              (group-from-group-id (kinfo-proc-group-id proc))))))
+  (flet ((uid->user (uid) (cffi:foreign-funcall "user_from_uid" :uint32 uid :int 1 :string))
+         (gid->group (gid) (cffi:foreign-funcall "group_from_gid" :uint32 gid :int 1 :string)))
+    (with-current-process (proc)
+      (let ((cwd (cffi:with-foreign-object (cwd :char 1024)
+                   (sysctl (list +ctl-kern+ +kern-proc-cwd+ (getpid)) cwd 1024)
+                   (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp cwd) :as :directory)))
+            (command (let ((command (cffi:foreign-string-to-lisp
+                                     (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name))))
+                       (or (resolve-executable command) command))))
+        (values command
+                cwd
+                (uid->user (kinfo-proc-user-id proc))
+                (gid->group (kinfo-proc-group-id proc)))))))
 
-(defun %%sysctl (mib mibn old oldlen new newlen)
-  (cffi:foreign-funcall "sysctl" (:pointer :int) mib :uint mibn :pointer old (:pointer :size) oldlen :pointer new :size newlen :int))
+(cffi:defcfun (c-sysctl "sysctl") :int
+  (mib (:pointer :int))
+  (mib-len :uint)
+  (old :pointer)
+  (oldlen (:pointer :size))
+  (new :pointer)
+  (newlen :size))
 
 (defun %sysctl (mib out &optional out-size)
   (assert (>= (length mib) 2) (mib) "Need at least a name and a second level name to call sysctl")
+
   (let ((mibn (length mib)))
     (cffi:with-foreign-objects ((%mib :int mibn))
       (loop
@@ -223,26 +208,38 @@
 
       (cffi:with-foreign-objects ((oldlen :size))
         (cond
-          (out
+          (out ;; Call for the value
            (setf (cffi:mem-ref oldlen :size) out-size)
-           (%%sysctl %mib mibn out oldlen (cffi:null-pointer) 0))
-          (t
-           (%%sysctl %mib mibn (cffi:null-pointer) oldlen (cffi:null-pointer) 0)
+           (c-sysctl %mib mibn out oldlen (cffi:null-pointer) 0))
+          (t ;; Call for the length
+           (c-sysctl %mib mibn (cffi:null-pointer) oldlen (cffi:null-pointer) 0)
            (cffi:mem-ref oldlen :size)))))))
 
-(defun sysctl-unchecked (mib out &optional out-size)
-  (%sysctl mib out out-size))
-
 (defun sysctl (names out &optional out-size)
+  "Call sysctl with MIB as the list of names, store the result in OUT, which must be of at least OUT-SIZE.
+If OUT is NIL, call sysctl with MIB and return the number of bytes that would be written into OUT."
   (let ((ret (%sysctl names out out-size)))
     (if (= -1 ret)
         (fail (strerror) "sysctl")
         ret)))
 
+(defun sysctl-unchecked (mib out &optional out-size)
+  "Like SYSCTL but don't handle the ERRNO, useful for when ERRNO has special meanings."
+  (%sysctl mib out out-size))
+
 (defun sysctl-string (names size)
+  "Like SYSCTL but the return value is a string of SIZE characters."
   (cffi:with-foreign-objects ((str :char size))
     (sysctl names str size)
     (cffi:foreign-string-to-lisp str :max-chars size)))
+
+(defmacro with-sysctl ((mib out type &optional (count 1)) &body body)
+  "Utility for SYSCTL, MIB is evaluated into a list."
+  (let ((%mib (gensym)) (%count (gensym)))
+    `(let ((,%mib (list ,@mib)) (,%count ,count))
+       (cffi:with-foreign-object (,out ,type ,%count)
+         (sysctl ,%mib ,out (* ,%count (cffi:foreign-type-size ,type)))
+         ,@body))))
 
 (cffi:defcstruct (uvmexp :size 344 :conc-name uvmexp-)
   (pagesize :int :offset 0)
@@ -251,8 +248,7 @@
   (inactive :int :offset 24))
 
 (define-implementation machine-room ()
-  (cffi:with-foreign-object (uvm '(:struct uvmexp))
-    (sysctl (list +ctl-vm+ +vm-uvmexp+) uvm (sizeof '(:struct uvmexp)))
+  (with-sysctl ((+ctl-vm+ +vm-uvmexp+) uvm '(:struct uvmexp))
     (flet ((pages->bytes (n)
              (* n (uvmexp-pagesize uvm))))
       (let* ((total-pages (uvmexp-npages uvm))
@@ -271,14 +267,12 @@
   (- (get-universal-time) +unix-epoch+))
 
 (define-implementation machine-uptime ()
-  (cffi:with-foreign-object (tv '(:struct timeval))
-    (sysctl (list +ctl-kern+ +kern-boottime+) tv (sizeof '(:struct timeval)))
+  (with-sysctl ((+ctl-kern+ +kern-boottime+) tv '(:struct timeval))
     (- (get-unix-time) (timeval-sec tv))))
 
 (define-implementation machine-cores ()
-  (cffi:with-foreign-object (online-cores :int)
-    (sysctl (list +ctl-hw+ +hw-ncpuonline+) online-cores (sizeof ':int))
-    (cffi:mem-ref online-cores :int)))
+  (with-sysctl ((+ctl-hw+ +hw-ncpuonline+) cores :int)
+    (cffi:mem-ref cores :int)))
 
 (cffi:defcstruct (clockinfo :size 16 :conc-name clockinfo-)
   (hz :int))
@@ -289,24 +283,21 @@
   (times (:array :uint64 #.+cpustates+))) ;; cs_time
 
 (defun core-time (core)
-  (cffi:with-foreign-object (cpustats '(:struct cpustats))
-    (sysctl (list +ctl-kern+ +kern-cpustats+ core) cpustats (sizeof '(:struct cpustats)))
+  (with-sysctl ((+ctl-kern+ +kern-cpustats+ core) cpustats '(:struct cpustats))
     (cpustats-times cpustats)))
 
 (defun cpu-time ()
-  (cffi:with-foreign-object (cpustates :long +cpustates+)
-    (sysctl (list +ctl-kern+ +kern-cptime+) cpustates (* +cpustates+ (sizeof ':long)))
+  (with-sysctl ((+ctl-kern+ +kern-cptime+) cpustates :long +cpustates+)
     (cffi:mem-ref cpustates `(:array :long ,+cpustates+))))
 
-;; TODO: Still broken
 ;;;; KERN_CPTIME2 returns wrong values for some reason, KERN_CPUSTATS works better
 (define-implementation machine-time (core)
-  (cffi:with-foreign-objects ((clockinfo '(:struct clockinfo)))
-    (sysctl (list +ctl-kern+ +kern-clockrate+) clockinfo (sizeof '(:struct clockinfo)))
+  (with-sysctl ((+ctl-kern+ +kern-clockrate+) clockinfo '(:struct clockinfo))
     (flet ((conv (x) (/ x (float (clockinfo-hz clockinfo) 0.0d0))))
-      (let ((values (if (eq 't core)
-                        (cpu-time)
-                        (core-time core))))
+      (let ((values (cond
+                      ((eq 't core) (cpu-time))
+                      ((>= core (machine-cores)) (fail "No such core."))
+                      (t (core-time core)))))
         (destructuring-bind (user nice sys spin intr idle) (coerce values 'list)
           (values (conv idle)
                   (conv (+ user nice sys spin intr idle))))))))
@@ -338,15 +329,12 @@
               (find-sensor-number name (1+ dev))
               nil)))
       (let ((sensor-name (cffi:foreign-slot-pointer sensordev '(:struct sensordev) 'name)))
-        (if (= 0 (cffi:foreign-funcall "strncmp" :pointer sensor-name :string name :size +sensor-name-size+ :int))
+        (if (strncmp-lisp sensor-name name :max-chars +sensor-name-size+)
             dev
             (find-sensor-number name (1+ dev)))))))
 
 (defun find-sensor-value (device sensor-type sensor-index)
-  (cffi:with-foreign-object (sensor '(:struct sensor))
-    (sysctl (list +ctl-hw+ +hw-sensors+ device sensor-type sensor-index)
-            sensor
-            (sizeof '(:struct sensor)))
+  (with-sysctl ((+ctl-hw+ +hw-sensors+ device sensor-type sensor-index) sensor '(:struct sensor))
     (sensor-value sensor)))
 
 (define-implementation machine-battery ()
@@ -377,9 +365,11 @@
             (arch-type)
             (sysctl-string (list +ctl-hw+ +hw-machine+) 32))))
 
-(cffi:defcstruct (stat :size 128 :conc-name stat-)
-  (mode    :uint32 :offset 0) ;; st_mode
-  (dev     :uint64 :offset 4)) ;; st_dev
+(cffi:defcstruct (stat :size #+32-bit 108
+                             #+64-bit 128
+                       :conc-name stat-)
+  (mode    :int :offset 0) ;; st_mode
+  (dev     :int :offset 4)) ;; st_dev
 
 (defun pathname-force-file (path)
   (cond
@@ -456,7 +446,7 @@
   (let ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
     (do-filesystems (fs)
       (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
-        (when (= 0 (cffi:foreign-funcall "strncmp" :pointer fs-mountpoint :string mount-root :size +mnamelen+ :int))
+        (when (strncmp-lisp fs-mountpoint mount-root :max-chars +mnamelen+)
           (return (pathname-name
                    (cffi:foreign-string-to-lisp
                     (cffi:foreign-slot-pointer fs '(:struct statfs) 'device) :max-chars +mnamelen+))))))))
@@ -465,7 +455,7 @@
   (let ((device-path (pathname-utils:native-namestring (make-pathname :defaults #P"/dev/" :name device))))
     (do-filesystems (fs)
       (let ((fs-device (cffi:foreign-slot-pointer fs '(:struct statfs) 'device)))
-        (when (= 0 (cffi:foreign-funcall "strncmp" :pointer fs-device :string device-path :size +mnamelen+ :int))
+        (when (strncmp-lisp fs-device device-path :max-chars +mnamelen+)
           (return (pathname-utils:parse-native-namestring
                    (cffi:foreign-string-to-lisp
                     (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint) :max-chars +mnamelen+))))))))
@@ -479,7 +469,7 @@
 
   (do-filesystems (fs)
     (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
-      (when (= 0 (cffi:foreign-funcall "strncmp" :pointer fs-mountpoint :string path :size +mnamelen+ :int))
+      (when (strncmp-lisp fs-mountpoint path :max-chars +mnamelen+)
         (let ((reads (+ (statfs-synchronous-reads fs)
                         (statfs-asynchronous-reads fs)))
               (writes (+ (statfs-synchronous-writes fs)
@@ -491,35 +481,35 @@
   (when (stringp path)
     (setf path (storage-device-path path)))
 
-  (do-filesystems (fs)
-    (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
-      (when (= 0 (cffi:foreign-funcall "strncmp" :pointer fs-mountpoint :string (pathname-utils:native-namestring path) :size +mnamelen+ :int))
-        (flet ((block->bytes (n)
-                 (* n (statfs-block-size fs))))
-          (return-from storage-room
-            (values (block->bytes (statfs-available-blocks fs))
-                    (block->bytes (statfs-blocks fs)))))))))
+  (let ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
+    (do-filesystems (fs)
+      (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
+        (when (strncmp-lisp fs-mountpoint mount-root :max-chars +mnamelen+)
+          (flet ((block->bytes (n)
+                   (* n (statfs-block-size fs))))
+            (return-from storage-room
+              (values (block->bytes (statfs-available-blocks fs))
+                      (block->bytes (statfs-blocks fs))))))))))
 
 ;;;; https://github.com/openbsd/src/blob/master/include/ifaddrs.h#L31
 (cffi:defcstruct (ifaddrs :conc-name ifaddrs-)
-  (next (:pointer (:struct ifaddrs)))
-  (name :string )
-  (flags :uint)
-  (address :pointer)
-  (netmask :pointer)
-  (broadcast :pointer)
-  (p2p-destination :pointer)
-  (data :pointer))
+  (next (:pointer (:struct ifaddrs))) ;; ifa_next
+  (name :string) ;; ifa_name
+  (flags :uint) ;; ifa_flags
+  (address :pointer) ;; ifa_addr
+  (netmask :pointer) ;; ifa_netmask
+  (destination :pointer) ;; ifa_dstaddr/ifa_broadaddr
+  (data :pointer)) ;; ifa_data
 
 (cffi:defcstruct (sockaddr :conc-name sockaddr-)
-  (length :uint8)
-  (family :uint8)
-  (data (:array :char 14)))
+  (length :uint8) ;; sa_len
+  (family :uint8) ;; sa_family
+  (data (:array :char 14))) ;; sa_data
 
 (cffi:defcstruct (sockaddr-dl :size 32 :conc-name sockaddr-dl-)
-  (interface-name-length :unsigned-char :offset 5)
-  (address-length :unsigned-char :offset 6)
-  (data (:array :unsigned-char 24) :offset 8))
+  (interface-name-length :unsigned-char :offset 5) ;; sdl_nlen
+  (address-length :unsigned-char :offset 6) ;; sdl_alen
+  (data (:array :unsigned-char 24) :offset 8)) ;; sdl_data
 
 (defmacro do-ifaddrs ((ifaddr) &body body)
   (let ((ifap (gensym)))
@@ -592,8 +582,4 @@
 (define-implementation network-info ()
   (sysctl-string (list +ctl-kern+ +kern-hostname+) 255))
 
-(define-implementation network-io-bytes (device)
-  (values 0 0 0))
-
-(define-implementation gpu-info ()
-  (values nil "Unknown"))
+;;;; network-io-bytes is unsupported
