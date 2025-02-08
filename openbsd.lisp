@@ -30,9 +30,6 @@
 (defconstant +ctl-vm+ 2)
 (defconstant +vm-uvmexp+ 4)
 
-(defun sizeof (type)
-  (cffi:foreign-type-size type))
-
 ;;;; errno is a thread local in openbsd, simple (defcvar errno) won't work
 ;;;; https://github.com/openbsd/src/blob/master/lib/libc/gen/errno.c#L57
 ;;;; https://github.com/openbsd/src/blob/master/include/errno.h#L54
@@ -75,9 +72,11 @@
 
 (defmacro with-current-process ((proc) &body body)
   `(cffi:with-foreign-object (,proc '(:struct kinfo-proc))
-     (sysctl (list +ctl-kern+ +kern-proc+ +kern-proc-pid+ (getpid) (sizeof '(:struct kinfo-proc)) 1)
+     (sysctl (list +ctl-kern+ +kern-proc+ +kern-proc-pid+
+                   (getpid)
+                   (cffi:foreign-type-size '(:struct kinfo-proc)) 1)
              ,proc
-             (sizeof '(:struct kinfo-proc)))
+             (cffi:foreign-type-size '(:struct kinfo-proc)))
      ,@body))
 
 (define-implementation process-room ()
@@ -129,7 +128,7 @@
               (,nproc (ceiling (/ (sysctl ,mib nil) ,kinfo-proc-size))))
          (rplaca (last ,mib) ,nproc)
          (cffi:with-foreign-object (,procs '(:struct kinfo-proc) ,nproc)
-           (sysctl ,mib ,procs (* (sizeof '(:struct kinfo-proc)) ,nproc))
+           (sysctl ,mib ,procs (* (cffi:foreign-type-size '(:struct kinfo-proc)) ,nproc))
            (dotimes (,i ,nproc)
              (let ((,thread (cffi:mem-aptr ,procs '(:struct kinfo-proc) ,i)))
                (when (> (kinfo-proc-thread-id ,thread) 1)
@@ -322,7 +321,7 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
 
 (defun find-sensor-number (name &optional (dev 0))
   (cffi:with-foreign-object (sensordev '(:struct sensordev))
-    (let ((ret (sysctl-unchecked (list +ctl-hw+ +hw-sensors+ dev) sensordev (sizeof '(:struct sensordev)))))
+    (let ((ret (sysctl-unchecked (list +ctl-hw+ +hw-sensors+ dev) sensordev (cffi:foreign-type-size '(:struct sensordev)))))
       (when (= -1 ret)
         (return-from find-sensor-number
           (if (= +enxio+ (errno))
@@ -426,7 +425,7 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
 
 (defun %getfsstat (buf &optional (count 0) (wait? t))
   (let* ((flags (if wait? +mnt-wait+ +mnt-nowait+))
-         (bufsize (* count (sizeof '(:struct statfs)))))
+         (bufsize (* count (cffi:foreign-type-size '(:struct statfs)))))
     (posix-call "getfsstat" :pointer (or buf (cffi:null-pointer)) :size bufsize :int flags :int)))
 
 (defun mount-count ()
