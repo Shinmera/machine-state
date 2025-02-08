@@ -43,3 +43,33 @@
     (nxgl-call "nxgl_vram" :pointer free :pointer total)
     (values (cffi:mem-ref free :size)
             (cffi:mem-ref total :size))))
+
+(define-implementation process-info ()
+  (values (make-pathname :name "sbcl" :device "rom" :directory '(:absolute))
+          (make-pathname :device "tmp" :directory '(:absolute))
+          (cffi:with-foreign-object (nick :char 33)
+            (when (cffi:foreign-funcall "nxgl_username" :pointer nick :int 33 :bool)
+              (cffi:foreign-string-to-lisp nick :max-chars 33)))
+          "Unknown"))
+
+(define-implementation network-devices ()
+  (list "net"))
+
+(defun mac-str (octets)
+  (format NIL "~{~2,'0x~^:~}" (coerce octets 'list)))
+
+(defun ipv4-str (ipv4)
+  (format NIL "~d.~d.~d.~d"
+          (ldb (byte 8 0) ipv4)
+          (ldb (byte 8 8) ipv4)
+          (ldb (byte 8 16) ipv4)
+          (ldb (byte 8 24) ipv4)))
+
+(define-implementation network-address (device)
+  (values (cffi:with-foreign-object (mac :uint8 6)
+            (when (cffi:foreign-funcall "nxgl_mac_address" :pointer mac :bool)
+              (mac-str (cffi:foreign-array-to-lisp mac '(:array :uint8 6)))))
+          (cffi:with-foreign-object (addr :uint32)
+            (when (cffi:foreign-funcall "nxgl_ip_address" :pointer addr :bool)
+              (ipv4-str (cffi:mem-ref addr :uint32))))
+          NIL))
