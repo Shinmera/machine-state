@@ -184,11 +184,15 @@
                          writes)))))))
 
 (define-implementation machine-info ()
-  (values (with-open-file (o "/sys/devices/virtual/dmi/id/board_vendor") (read-line o))
-          (with-open-file (o "/sys/devices/virtual/dmi/id/board_name") (read-line o))
-          :linux
-          (do-proc ((version :char 64)) ("/proc/version" "Linux version %s")
-            (return (cffi:foreign-string-to-lisp version :max-chars 64)))))
+  (flet ((maybe-read-line (file)
+           (if (probe-file file)
+               (with-open-file (o file) (read-line o))
+               "Unknown")))
+    (values (maybe-read-line "/sys/devices/virtual/dmi/id/board_vendor")
+            (maybe-read-line "/sys/devices/virtual/dmi/id/board_name")
+            :linux
+            (do-proc ((version :char 64)) ("/proc/version" "Linux version %s")
+              (return (cffi:foreign-string-to-lisp version :max-chars 64))))))
 
 (defun prefix-p (prefix str)
   (and (<= (length prefix) (length str))
