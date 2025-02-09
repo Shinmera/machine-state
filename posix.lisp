@@ -72,8 +72,9 @@
 (define-implementation machine-room ()
   (cffi:with-foreign-objects ((sysinfo '(:struct sysinfo)))
     (posix-call "sysinfo" :pointer sysinfo :int)
-    (let ((total (sysinfo-total-ram sysinfo))
-          (free (sysinfo-free-ram sysinfo)))
+    (let* ((unit (sysinfo-memory-unit sysinfo))
+           (total (* unit (sysinfo-total-ram sysinfo)))
+           (free (* unit (sysinfo-free-ram sysinfo))))
       (values (- total free) total))))
 
 #-darwin
