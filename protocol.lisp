@@ -211,7 +211,7 @@
   (values 0 0 NIL))
 
 (defun arch-type ()
-  (or #+(and x86 (not x86-64 amd64)) :X86
+  (or #+(and x86 (not (or x86-64 amd64))) :X86
       #+(or x86-64 amd64) :AMD64
       #+(and (or arm armv7 armv6 armv5) (not arm64)) :ARM
       #+arm64 :ARM64
