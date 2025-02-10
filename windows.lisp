@@ -24,6 +24,11 @@
 (cffi:use-foreign-library psapi)
 (cffi:use-foreign-library ntdll)
 
+(set 'cl-user::*foreign-system-libraries*
+     (union (when (boundp 'cl-user::*foreign-system-libraries*)
+              (symbol-value 'cl-user::*foreign-system-libraries*))
+            '(psapi ntdll pdh iphlpapi secur32 advapi32 oleaut32)))
+
 (defmacro windows-call (function &rest args)
   `(unless (cffi:foreign-funcall ,function ,@args)
      (fail (org.shirakumo.com-on:error-message))))
