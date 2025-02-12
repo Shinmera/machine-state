@@ -460,6 +460,10 @@ If the function is unsupported,
   \"Unknown\"
 are returned.
 
+You may want to load the machine-state/opengl library to make this
+function useful. In that case, it will only work if an OpenGL context
+is current to this thread.
+
 See MACHINE-INFO
 See MACHINE-CORE-INFO
 See PROCESS-INFO
