@@ -447,16 +447,18 @@ See NETWORK-INFO")
   (function gpu-info
     "Returns information about the graphics card.
 
-Returns two values:
+Returns three values:
    The vendor of the graphics card as a keyword:
      :NVIDIA
      :AMD (formerly ATI)
      :INTEL
      and others
   The model of the graphics card as a string
+  The version of OpenGL and/or graphics card driver as a string
 
 If the function is unsupported,
   NIL
+  \"Unknown\"
   \"Unknown\"
 are returned.
 
