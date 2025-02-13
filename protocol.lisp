@@ -226,8 +226,8 @@
 (define-protocol-fun process-info () (pathname pathname string string)
   (values *default-pathname-defaults* *default-pathname-defaults* "Unknown" "Unknown"))
 
-(define-protocol-fun gpu-info () (symbol string)
-  (values NIL "Unknown"))
+(define-protocol-fun gpu-info () (symbol string string)
+  (values NIL "Unknown" "Unknown"))
 
 (define-protocol-fun network-info () ((or string null))
   (values NIL))

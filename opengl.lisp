@@ -54,4 +54,5 @@
                   ((search "nvidia" vendor :test #'char-equal) :nvidia)
                   ((search "ati" vendor :test #'char-equal) :amd)
                   ((search "amd" vendor :test #'char-equal) :amd)))
-          (gl:get-string :renderer)))
+          (gl:get-string :renderer)
+          (gl:get-string :version)))
