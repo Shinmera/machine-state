@@ -30,23 +30,8 @@
 (defconstant +ctl-vm+ 2)
 (defconstant +vm-uvmexp+ 4)
 
-;;;; errno is a thread local in openbsd, simple (defcvar errno) won't work
-;;;; https://github.com/openbsd/src/blob/master/lib/libc/gen/errno.c#L57
-;;;; https://github.com/openbsd/src/blob/master/include/errno.h#L54
-(cffi:defcfun (errno-location "__errno") (:pointer :int))
-(defun errno () (cffi:mem-ref (errno-location) :int))
-
-(defun strerror (&optional (errno (errno)))
-  (cffi:foreign-funcall "strerror" :int errno :string))
-
 (defun strncmp-lisp (foreign-str lisp-str &key (max-chars (length lisp-str)))
   (= 0 (cffi:foreign-funcall "strncmp" :pointer foreign-str :string lisp-str :size max-chars :int)))
-
-(defmacro posix-call (function &rest args)
-  `(let ((val (cffi:foreign-funcall ,function ,@args)))
-     (if (< val 0)
-         (fail (strerror))
-         val)))
 
 ;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L363
 (defconstant +ki-maxcomlen+ 24) ;; ACtually _MAXCOMLEN
@@ -187,58 +172,6 @@
                 cwd
                 (uid->user (kinfo-proc-user-id proc))
                 (gid->group (kinfo-proc-group-id proc)))))))
-
-(cffi:defcfun (c-sysctl "sysctl") :int
-  (mib (:pointer :int))
-  (mib-len :uint)
-  (old :pointer)
-  (oldlen (:pointer :size))
-  (new :pointer)
-  (newlen :size))
-
-(defun %sysctl (mib out &optional out-size)
-  (assert (>= (length mib) 2) (mib) "Need at least a name and a second level name to call sysctl")
-
-  (let ((mibn (length mib)))
-    (cffi:with-foreign-objects ((%mib :int mibn))
-      (loop
-        for name in mib and i from 0
-        do (setf (cffi:mem-aref %mib :int i) name))
-
-      (cffi:with-foreign-objects ((oldlen :size))
-        (cond
-          (out ;; Call for the value
-           (setf (cffi:mem-ref oldlen :size) out-size)
-           (c-sysctl %mib mibn out oldlen (cffi:null-pointer) 0))
-          (t ;; Call for the length
-           (c-sysctl %mib mibn (cffi:null-pointer) oldlen (cffi:null-pointer) 0)
-           (cffi:mem-ref oldlen :size)))))))
-
-(defun sysctl (names out &optional out-size)
-  "Call sysctl with MIB as the list of names, store the result in OUT, which must be of at least OUT-SIZE.
-If OUT is NIL, call sysctl with MIB and return the number of bytes that would be written into OUT."
-  (let ((ret (%sysctl names out out-size)))
-    (if (= -1 ret)
-        (fail (strerror) "sysctl")
-        ret)))
-
-(defun sysctl-unchecked (mib out &optional out-size)
-  "Like SYSCTL but don't handle the ERRNO, useful for when ERRNO has special meanings."
-  (%sysctl mib out out-size))
-
-(defun sysctl-string (names size)
-  "Like SYSCTL but the return value is a string of SIZE characters."
-  (cffi:with-foreign-objects ((str :char size))
-    (sysctl names str size)
-    (cffi:foreign-string-to-lisp str :max-chars size)))
-
-(defmacro with-sysctl ((mib out type &optional (count 1)) &body body)
-  "Utility for SYSCTL, MIB is evaluated into a list."
-  (let ((%mib (gensym)) (%count (gensym)))
-    `(let ((,%mib (list ,@mib)) (,%count ,count))
-       (cffi:with-foreign-object (,out ,type ,%count)
-         (sysctl ,%mib ,out (* ,%count (cffi:foreign-type-size ,type)))
-         ,@body))))
 
 (cffi:defcstruct (uvmexp :size 344 :conc-name uvmexp-)
   (pagesize :int :offset 0)
