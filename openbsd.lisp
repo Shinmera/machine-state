@@ -198,9 +198,6 @@
   (with-sysctl ((+ctl-hw+ +hw-ncpuonline+) cores :int)
     (cffi:mem-ref cores :int)))
 
-(cffi:defcstruct (clockinfo :size 16 :conc-name clockinfo-)
-  (hz :int))
-
 (defconstant +cpustates+ 6)
 
 (cffi:defcstruct (cpustats :size 56 :conc-name cpustats-)

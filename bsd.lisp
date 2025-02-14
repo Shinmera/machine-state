@@ -25,6 +25,7 @@
    "Call sysctl with MIB as the list of names, store the result in OUT, which must be of at least OUT-SIZE.
 If OUT is NIL, call sysctl with MIB and return the number of bytes that would be written into OUT."))
 
+#+freebsd
 (defmethod sysctl ((mib string) &optional out out-size)
   (cffi:with-foreign-object (oldlen :size)
     (when out
@@ -91,3 +92,10 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
 
 (defconstant +unix-epoch+ (encode-universal-time 0 0 0 1 1 1970 0))
 (defun get-unix-time () (- (get-universal-time) +unix-epoch+))
+
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/sys/time.h#L480
+;;;; https://github.com/openbsd/src/blob/master/sys/sys/time.h#L157
+(cffi:defcstruct (clockinfo :size #+openbsd 16
+                                  #+freebsd 20
+                            :conc-name clockinfo-)
+  (hz :int))
