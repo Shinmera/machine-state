@@ -84,3 +84,10 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
   "Like SYSCTL but the return value is a string of SIZE characters."
   (with-sysctl (names str `(:char ,size))
     (cffi:foreign-string-to-lisp str :max-chars size)))
+
+(cffi:defcstruct (timeval :conc-name timeval-)
+  (sec :uint64)
+  (usec :uint64))
+
+(defconstant +unix-epoch+ (encode-universal-time 0 0 0 1 1 1970 0))
+(defun get-unix-time () (- (get-universal-time) +unix-epoch+))
