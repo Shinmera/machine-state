@@ -39,3 +39,10 @@
         (destructuring-bind (user nice sys intr idle) (coerce values 'list)
           (values (conv idle)
                   (conv (+ user nice sys intr idle))))))))
+
+(define-implementation machine-core-info ()
+  (let ((processor (sysctl-string "hw.model" 128)))
+    (values processor
+            processor ;; There doesn't seem to be a separation between those
+            (arch-type)
+            (sysctl-string "hw.machine" 32))))
