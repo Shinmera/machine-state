@@ -16,3 +16,26 @@
 (define-implementation machine-cores ()
   (with-sysctl ("hw.ncpu" cores :int)
     (cffi:mem-ref cores :int)))
+
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/sys/resource.h#L172
+(defconstant +cpustates+ 5)
+
+(defun cpu-time ()
+  (with-sysctl ("kern.cp_time" cpustates :uint64 +cpustates+)
+    (cffi:mem-ref cpustates `(:array :uint64 ,+cpustates+))))
+
+(defun core-time (core)
+  (let ((size (* (machine-cores) +cpustates+)))
+    (with-sysctl ("kern.cp_times" cpustates :uint64 size)
+      (cffi:mem-aref cpustates `(:array :uint64 ,+cpustates+) core))))
+
+(define-implementation machine-time (core)
+  (with-sysctl ("kern.clockrate" clockinfo '(:struct clockinfo))
+    (flet ((conv (x) (/ x (float (clockinfo-hz clockinfo) 0.0d0))))
+      (let ((values (cond
+                      ((eq 't core) (cpu-time))
+                      ((>= core (machine-cores)) (fail "No such core."))
+                      (t (core-time core)))))
+        (destructuring-bind (user nice sys intr idle) (coerce values 'list)
+          (values (conv idle)
+                  (conv (+ user nice sys intr idle))))))))
