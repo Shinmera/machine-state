@@ -12,3 +12,7 @@
 (define-implementation machine-uptime ()
   (with-sysctl ("kern.boottime" tv '(:struct timeval))
     (- (get-unix-time) (timeval-sec tv))))
+
+(define-implementation machine-cores ()
+  (with-sysctl ("hw.ncpu" cores :int)
+    (cffi:mem-ref cores :int)))
