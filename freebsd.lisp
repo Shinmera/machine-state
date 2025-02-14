@@ -8,3 +8,7 @@
           (physmem (cffi:mem-ref physmem :uint64))
           (free (cffi:mem-ref free :uint64)))
       (values (- physmem (* free page-size)) physmem))))
+
+(define-implementation machine-uptime ()
+  (with-sysctl ("kern.boottime" tv '(:struct timeval))
+    (- (get-unix-time) (timeval-sec tv))))

@@ -190,14 +190,6 @@
         (values (- total-bytes free-bytes)
                 total-bytes)))))
 
-(cffi:defcstruct (timeval :conc-name timeval-)
-  (sec :uint64)
-  (usec :uint64))
-
-(defconstant +unix-epoch+ (encode-universal-time 0 0 0 1 1 1970 0))
-(defun get-unix-time ()
-  (- (get-universal-time) +unix-epoch+))
-
 (define-implementation machine-uptime ()
   (with-sysctl ((+ctl-kern+ +kern-boottime+) tv '(:struct timeval))
     (- (get-unix-time) (timeval-sec tv))))
