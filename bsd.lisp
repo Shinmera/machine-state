@@ -81,10 +81,11 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
          (with-sysctls (,@(cdr sysctls)) ,@body))
       `(progn ,@body)))
 
-(defun sysctl-string (names size)
+(defmacro sysctl-string (names size)
   "Like SYSCTL but the return value is a string of SIZE characters."
-  (with-sysctl (names str `(:char ,size))
-    (cffi:foreign-string-to-lisp str :max-chars size)))
+  (let ((%str (gensym)))
+    `(with-sysctl (,names ,%str :char ,size)
+       (cffi:foreign-string-to-lisp ,%str :max-chars ,size))))
 
 (cffi:defcstruct (timeval :conc-name timeval-)
   (sec :uint64)
@@ -96,6 +97,6 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
 ;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/sys/time.h#L480
 ;;;; https://github.com/openbsd/src/blob/master/sys/sys/time.h#L157
 (cffi:defcstruct (clockinfo :size #+openbsd 16
-                                  #+freebsd 20
+                                  #+freebsd 20 ;; FreeBSD has a reserved field
                             :conc-name clockinfo-)
   (hz :int))
