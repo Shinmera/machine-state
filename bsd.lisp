@@ -313,7 +313,12 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
   (format nil "~{~2,'0x~^:~}" (coerce macaddr 'list)))
 
 (defun ipv6->string (ipv6)
-  (format nil "~{~2,'0x~^:~}" (coerce ipv6 'list)))
+  (labels ((fmt-byte (x) (format nil "~2,'0x" x))
+           (fmt-segment (x y) (format nil "~a~a" (fmt-byte x) (fmt-byte y))))
+    (format nil "~{~a~^:~}"
+            (loop
+              for (x y) on (coerce ipv6 'list) by #'cddr
+              collect (fmt-segment x y)))))
 
 (define-implementation network-address (device)
   (let (ipv4 ipv6 mac)
