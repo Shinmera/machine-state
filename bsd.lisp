@@ -238,7 +238,7 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
   (let ((statfs (gensym)) (count (gensym)) (i (gensym)))
     `(let ((,count (mount-count)))
        (cffi:with-foreign-object (,statfs '(:struct statfs) ,count)
-         (%getfsstat ,statfs ,count)
+         (getfsstat ,statfs ,count)
          (or (dotimes (,i ,count)
                (let ((,fs (cffi:mem-aptr ,statfs '(:struct statfs) ,i)))
                  ,@body))

@@ -124,3 +124,35 @@
         (return (pathname-utils:parse-native-namestring
                  (cffi:foreign-string-to-lisp
                   (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint) :max-chars +mnamelen+)))))))
+
+;;;; TODO: does NOT work with ZFS
+(define-implementation storage-io-bytes (path)
+  (setf path (pathname-utils:native-namestring
+              (pathname-force-file
+               (etypecase path
+                 (pathname (find-mount-root path))
+                 (string (storage-device-path path))))))
+
+  (do-filesystems (fs)
+    (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
+      (when (strncmp-lisp fs-mountpoint path :max-chars +mnamelen+)
+        (let ((reads (+ (statfs-synchronous-reads fs)
+                        (statfs-asynchronous-reads fs)))
+              (writes (+ (statfs-synchronous-writes fs)
+                         (statfs-asynchronous-writes fs))))
+          (return-from storage-io-bytes
+            (values (+ reads writes) reads writes)))))))
+
+(define-implementation storage-room (path)
+  (when (stringp path)
+    (setf path (storage-device-path path)))
+
+  (let ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
+    (do-filesystems (fs)
+      (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
+        (when (strncmp-lisp fs-mountpoint mount-root :max-chars +mnamelen+)
+          (flet ((block->bytes (n)
+                   (* n (statfs-block-size fs))))
+            (return-from storage-room
+              (values (block->bytes (statfs-available-blocks fs))
+                      (block->bytes (statfs-blocks fs))))))))))
