@@ -90,3 +90,37 @@
               (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp cwd :max-chars 1024) :as :directory))
             (uid->user (kinfo-proc-user-id proc))
             (gid->group (kinfo-proc-group-id proc)))))
+
+(cffi:defcstruct (stat :size 224 #| 64-bit |# :conc-name stat-)
+  (dev     :int :offset 0) ;; st_dev
+  (mode    :int :offset 24)) ;; st_mode
+
+(defconstant +mnamelen+ 1024)
+
+#+64-bit
+(cffi:defcstruct (statfs :size 2344 :conc-name statfs-)
+  (block-size :uint32 :offset 16)
+  (blocks :uint64 :offset 32)
+  (available-blocks :int64 :offset 48) ;; Blocks available to non-superuser
+  (synchronous-writes :uint64 :offset 72)
+  (synchronous-reads :uint64 :offset 80)
+  (asynchronous-writes :uint64 :offset 88)
+  (asynchronous-reads :uint64 :offset 96)
+  (device (:array :char #.+mnamelen+) :offset 296)
+  (mountpoint (:array :char #.+mnamelen+) :offset 1320))
+
+(define-implementation storage-device (path)
+  (let ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
+    (do-filesystems (fs)
+      (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
+        (when (strncmp-lisp fs-mountpoint mount-root :max-chars +mnamelen+)
+          (return (cffi:foreign-string-to-lisp
+                   (cffi:foreign-slot-pointer fs '(:struct statfs) 'device) :max-chars +mnamelen+)))))))
+
+(define-implementation storage-device-path (device)
+  (do-filesystems (fs)
+    (let ((fs-device (cffi:foreign-slot-pointer fs '(:struct statfs) 'device)))
+      (when (strncmp-lisp fs-device device :max-chars +mnamelen+)
+        (return (pathname-utils:parse-native-namestring
+                 (cffi:foreign-string-to-lisp
+                  (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint) :max-chars +mnamelen+)))))))

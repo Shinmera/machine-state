@@ -3,6 +3,9 @@
 #-openbsd
 (cffi:defcvar (errno "errno") :int64)
 
+(defun strncmp-lisp (foreign-str lisp-str &key (max-chars (length lisp-str)))
+  (= 0 (cffi:foreign-funcall "strncmp" :pointer foreign-str :string lisp-str :size max-chars :int)))
+
 (defun errno ()
   #-openbsd errno
   ;; errno is a thread local in openbsd, simple (defcvar errno) won't work
@@ -182,3 +185,61 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
 
 (defun uid->user (uid) (cffi:foreign-funcall "user_from_uid" :uint32 uid :int 1 :string))
 (defun gid->group (gid) (cffi:foreign-funcall "group_from_gid" :uint32 gid :int 1 :string))
+
+#+openbsd
+(cffi:defcstruct (stat :size #+32-bit 108
+                             #+64-bit 128
+                       :conc-name stat-)
+  (mode :int :offset 0) ;; st_mode
+  (dev :int :offset 4)) ;; st_dev
+
+#+freebsd
+(cffi:defcstruct (stat :size #+64-bit 224
+                       :conc-name stat-)
+  (dev :int :offset 0) ;; st_dev
+  (mode :int :offset 24)) ;; st_mode
+
+(defconstant +mnt-wait+ 1)
+(defconstant +mnt-nowait+ 2)
+
+(defun pathname-force-file (path)
+  (cond
+    ((pathname-utils:root-p path) path)
+    ((pathname-utils:file-p path) path)
+    (T (let ((directories (pathname-directory path)))
+         (make-pathname :defaults path
+                        :directory (butlast directories)
+                        :name (car (last directories)))))))
+
+(defun find-mount-root (path)
+  (labels ((dev-id (path)
+             (cffi:with-foreign-objects ((stat '(:struct stat)))
+               (posix-call "stat" :string (pathname-utils:native-namestring path) :pointer stat :int)
+               (stat-dev stat)))
+           (rec (path &optional (id (dev-id path)))
+             (if (pathname-utils:root-p path)
+                 path
+                 (let* ((parent (pathname-utils:parent path))
+                        (parent-id (dev-id parent)))
+                   (if (= parent-id id)
+                       (rec parent parent-id)
+                       path)))))
+    (pathname-force-file (rec (truename path)))))
+
+(defun getfsstat (buf &optional (count 0) (wait? t))
+  (let* ((flags (if wait? +mnt-wait+ +mnt-nowait+))
+         (bufsize (* count (cffi:foreign-type-size '(:struct statfs)))))
+    (posix-call "getfsstat" :pointer (or buf (cffi:null-pointer)) :size bufsize :int flags :int)))
+
+(defun mount-count ()
+  (getfsstat nil))
+
+(defmacro do-filesystems ((fs) &body body)
+  (let ((statfs (gensym)) (count (gensym)) (i (gensym)))
+    `(let ((,count (mount-count)))
+       (cffi:with-foreign-object (,statfs '(:struct statfs) ,count)
+         (%getfsstat ,statfs ,count)
+         (or (dotimes (,i ,count)
+               (let ((,fs (cffi:mem-aptr ,statfs '(:struct statfs) ,i)))
+                 ,@body))
+             (fail "Filesystem not found"))))))

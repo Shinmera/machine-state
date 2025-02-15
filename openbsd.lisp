@@ -30,9 +30,6 @@
 (defconstant +ctl-vm+ 2)
 (defconstant +vm-uvmexp+ 4)
 
-(defun strncmp-lisp (foreign-str lisp-str &key (max-chars (length lisp-str)))
-  (= 0 (cffi:foreign-funcall "strncmp" :pointer foreign-str :string lisp-str :size max-chars :int)))
-
 ;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L370
 (cffi:defcstruct (kinfo-proc :size 644 :conc-name kinfo-proc-)
   (user-id :uint32 :offset 128) ;; p_uid
@@ -248,32 +245,6 @@
   (mode    :int :offset 0) ;; st_mode
   (dev     :int :offset 4)) ;; st_dev
 
-(defun pathname-force-file (path)
-  (cond
-    ((pathname-utils:root-p path) path)
-    ((pathname-utils:file-p path) path)
-    (T (let ((directories (pathname-directory path)))
-         (make-pathname :defaults path
-                        :directory (butlast directories)
-                        :name (car (last directories)))))))
-
-(defun find-mount-root (path)
-  (labels ((dev-id (path)
-             (cffi:with-foreign-objects ((stat '(:struct stat)))
-               (posix-call "stat" :string (pathname-utils:native-namestring path) :pointer stat :int)
-               (stat-dev stat)))
-           (rec (path &optional (id (dev-id path)))
-             (if (pathname-utils:root-p path)
-                 path
-                 (let* ((parent (pathname-utils:parent path))
-                        (parent-id (dev-id parent)))
-                   (if (= parent-id id)
-                       (rec parent parent-id)
-                       path)))))
-    (pathname-force-file (rec (truename path)))))
-
-(defconstant +mnt-wait+ 1)
-(defconstant +mnt-nowait+ 2)
 (defconstant +mfsnamelen+ 16)
 (defconstant +mnamelen+ 90)
 
@@ -300,24 +271,6 @@
   (asynchronous-reads :uint64 :offset 88)
   (mountpoint (:array :char #.+mnamelen+) :offset 136)
   (device (:array :char #.+mnamelen+) :offset 226))
-
-(defun %getfsstat (buf &optional (count 0) (wait? t))
-  (let* ((flags (if wait? +mnt-wait+ +mnt-nowait+))
-         (bufsize (* count (cffi:foreign-type-size '(:struct statfs)))))
-    (posix-call "getfsstat" :pointer (or buf (cffi:null-pointer)) :size bufsize :int flags :int)))
-
-(defun mount-count ()
-  (%getfsstat nil))
-
-(defmacro do-filesystems ((fs) &body body)
-  (let ((statfs (gensym)) (count (gensym)) (i (gensym)))
-    `(let ((,count (mount-count)))
-       (cffi:with-foreign-object (,statfs '(:struct statfs) ,count)
-         (%getfsstat ,statfs ,count)
-         (or (dotimes (,i ,count)
-               (let ((,fs (cffi:mem-aptr ,statfs '(:struct statfs) ,i)))
-                 ,@body))
-             (fail "Filesystem not found"))))))
 
 (define-implementation storage-device (path)
   (let ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
