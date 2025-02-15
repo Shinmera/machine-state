@@ -243,3 +243,92 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
                (let ((,fs (cffi:mem-aptr ,statfs '(:struct statfs) ,i)))
                  ,@body))
              (fail "Filesystem not found"))))))
+
+;;;; https://github.com/openbsd/src/blob/master/include/ifaddrs.h#L31
+;;;; https://github.com/freebsd/freebsd-src/blob/main/include/ifaddrs.h#L32
+(cffi:defcstruct (ifaddrs :conc-name ifaddrs-)
+  (next (:pointer (:struct ifaddrs))) ;; ifa_next
+  (name :string) ;; ifa_name
+  (flags :uint) ;; ifa_flags
+  (address :pointer) ;; ifa_addr
+  (netmask :pointer) ;; ifa_netmask
+  (destination :pointer) ;; ifa_dstaddr/ifa_broadaddr
+  (data :pointer)) ;; ifa_data
+
+(cffi:defcstruct (sockaddr :conc-name sockaddr-)
+  (length :uint8) ;; sa_len
+  (family :uint8) ;; sa_family
+  (data (:array :char 14))) ;; sa_data
+
+(cffi:defcstruct (sockaddr-dl :size #+openbsd 32
+                                    #+freebsd 54
+                              :conc-name sockaddr-dl-)
+  (interface-name-length :unsigned-char :offset 5) ;; sdl_nlen
+  (address-length :unsigned-char :offset 6) ;; sdl_alen
+  (data (:array :unsigned-char #+openbsd 24 #+freebsd 46) :offset 8)) ;; sdl_data
+
+(defun sockaddr-dl-address (dl)
+  (let* ((addr-start (sockaddr-dl-interface-name-length dl))
+         (addr-length (sockaddr-dl-address-length dl)))
+    (if (= 0 addr-length)
+        nil
+        (subseq (sockaddr-dl-data dl) addr-start (+ addr-start addr-length)))))
+
+(cffi:defcstruct (sockaddr4 :size 16 :conc-name sockaddr4-)
+  (family :ushort :offset 1)
+  (port :uint16 :offset 2)
+  (addr (:array :uint8 4) :offset 4))
+
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/netinet6/in6.h#L128
+(cffi:defcstruct (sockaddr6 :size 28 :conc-name sockaddr6-)
+  (family :ushort :offset 1)
+  (port :uint16 :offset 2)
+  (addr (:array :uint8 16) :offset 8))
+
+(defconstant +af-link+ 18)
+(defconstant +af-inet+ 2)
+(defconstant +af-inet6+ #+openbsd 24 #+freebsd 28)
+
+(defmacro do-ifaddrs ((ifaptr) &body body)
+  (let ((ifap (gensym)))
+    `(cffi:with-foreign-object (,ifap :pointer)
+       (posix-call "getifaddrs" :pointer ,ifap :int)
+       (let ((,ifap (cffi:mem-ref ,ifap :pointer)))
+         (unwind-protect
+              (do ((,ifaptr ,ifap (ifaddrs-next ,ifaptr)))
+                  ((cffi:null-pointer-p ,ifaptr) nil)
+                ,@body)
+           (cffi:foreign-funcall "freeifaddrs" :pointer ,ifap))))))
+
+(define-implementation network-devices ()
+  (let ((names nil))
+    (do-ifaddrs (ifaddr)
+      (pushnew (ifaddrs-name ifaddr) names :test #'string=))
+    (nreverse names)))
+
+(defun ipv4->string (ipv4)
+  (format nil "~{~d~^.~}" (coerce ipv4 'list)))
+
+(defun macaddr->string (macaddr)
+  (format nil "~{~2,'0x~^:~}" (coerce macaddr 'list)))
+
+(defun ipv6->string (ipv6)
+  (format nil "~{~2,'0x~^:~}" (coerce ipv6 'list)))
+
+(define-implementation network-address (device)
+  (let (ipv4 ipv6 mac)
+    (do-ifaddrs (ifaddr)
+      (when (string= device (ifaddrs-name ifaddr))
+        (let* ((sockaddr (ifaddrs-address ifaddr))
+               (address-family (sockaddr-family sockaddr)))
+          (cond
+            ((= +af-inet+ address-family)
+             (unless ipv4 (setf ipv4 (ipv4->string (sockaddr4-addr sockaddr)))))
+            ((= +af-inet6+ address-family)
+             (unless ipv6 (setf ipv6 (ipv6->string (sockaddr6-addr sockaddr)))))
+            ((= +af-link+ address-family)
+             (unless mac
+               (let ((addr (sockaddr-dl-address sockaddr)))
+                 (when addr
+                   (setf mac (macaddr->string addr))))))))))
+    (values ipv4 ipv6 mac)))

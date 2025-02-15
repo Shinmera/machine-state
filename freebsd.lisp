@@ -156,3 +156,6 @@
             (return-from storage-room
               (values (block->bytes (statfs-available-blocks fs))
                       (block->bytes (statfs-blocks fs))))))))))
+
+(define-implementation network-info ()
+  (sysctl-string "kern.hostname" 255))

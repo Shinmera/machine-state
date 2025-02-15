@@ -26,7 +26,7 @@
 (defconstant +hw-physmem64+ 19)
 (defconstant +hw-ncpuonline+ 25)
 
-;; https://github.com/openbsd/src/blob/master/sys/uvm/uvmexp.h#L7
+;;;; https://github.com/openbsd/src/blob/master/sys/uvm/uvmexp.h#L7
 (defconstant +ctl-vm+ 2)
 (defconstant +vm-uvmexp+ 4)
 
@@ -42,7 +42,7 @@
   (thread-id :int32 :offset 608) ;; p_tid
   (thread-name (:array :char #.+maxcomlen+) :offset 624)) ;; p_name
 
-;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L752
+;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L752
 (cffi:defcstruct (kinfo-file :size 624 :conc-name kinfo-file-)
   (read-bytes :uint64 :offset 96) ;; f_rbytes
   (written-bytes :uint64 :offset 104)) ;; f_wbytes
@@ -320,94 +320,6 @@
             (return-from storage-room
               (values (block->bytes (statfs-available-blocks fs))
                       (block->bytes (statfs-blocks fs))))))))))
-
-;;;; https://github.com/openbsd/src/blob/master/include/ifaddrs.h#L31
-(cffi:defcstruct (ifaddrs :conc-name ifaddrs-)
-  (next (:pointer (:struct ifaddrs))) ;; ifa_next
-  (name :string) ;; ifa_name
-  (flags :uint) ;; ifa_flags
-  (address :pointer) ;; ifa_addr
-  (netmask :pointer) ;; ifa_netmask
-  (destination :pointer) ;; ifa_dstaddr/ifa_broadaddr
-  (data :pointer)) ;; ifa_data
-
-(cffi:defcstruct (sockaddr :conc-name sockaddr-)
-  (length :uint8) ;; sa_len
-  (family :uint8) ;; sa_family
-  (data (:array :char 14))) ;; sa_data
-
-(cffi:defcstruct (sockaddr-dl :size 32 :conc-name sockaddr-dl-)
-  (interface-name-length :unsigned-char :offset 5) ;; sdl_nlen
-  (address-length :unsigned-char :offset 6) ;; sdl_alen
-  (data (:array :unsigned-char 24) :offset 8)) ;; sdl_data
-
-(defmacro do-ifaddrs ((ifaddr) &body body)
-  (let ((ifap (gensym)))
-    `(cffi:with-foreign-object (,ifap :pointer)
-       (posix-call "getifaddrs" :pointer ,ifap :int)
-       (let ((,ifap (cffi:mem-ref ,ifap :pointer)))
-         (unwind-protect
-              (do ((,ifaddr
-                    (cffi:mem-ref ,ifap :pointer)
-                    (ifaddrs-next ,ifaddr)))
-                  ((cffi:null-pointer-p (ifaddrs-next ,ifaddr)) nil)
-                ,@body)
-           (cffi:foreign-funcall "freeifaddrs" :pointer ,ifap))))))
-
-(define-implementation network-devices ()
-  (let ((names nil))
-    (do-ifaddrs (ifaddr)
-      (pushnew (ifaddrs-name ifaddr) names :test #'string=))
-    (nreverse names)))
-
-(defconstant +af-inet+ 2)
-(defconstant +af-inet6+ 24)
-(defconstant +af-link+ 18)
-
-(defconstant +inet6-addrstrlen+ 46)
-(defconstant +ni-numerichost+ 1)
-
-(defconstant +eai-system+ -11)
-(defun gai-strerror (ecode)
-  (if (= +eai-system+ ecode)
-      (strerror)
-      (cffi:foreign-funcall "gai_strerror" :int ecode :string)))
-
-(defun getnameinfo (sockaddr)
-  (assert (member (sockaddr-family sockaddr) (list +af-inet+ +af-inet6+) :test #'=))
-  (cffi:with-foreign-object (name :char +inet6-addrstrlen+)
-    (let ((ret (cffi:foreign-funcall "getnameinfo"
-                                     :pointer sockaddr
-                                     :size (cffi:foreign-type-size '(:struct sockaddr))
-                                     :pointer name
-                                     :size +inet6-addrstrlen+
-                                     :pointer (cffi:null-pointer)
-                                     :size 0
-                                     :int +ni-numerichost+
-                                     :int)))
-      (when (< ret 0)
-        (fail (gai-strerror ret) "getnameinfo")))
-    (cffi:foreign-string-to-lisp name :max-chars +inet6-addrstrlen+)))
-
-(defun macaddr->string (macaddr &key (start 0) (end (+ start 6)))
-  (format nil "~{~2,'0x~^:~}" (coerce (subseq macaddr start end) 'list)))
-
-(define-implementation network-address (device)
-  (let (ipv4 ipv6 mac)
-    (do-ifaddrs (ifaddr)
-      (when (string= device (ifaddrs-name ifaddr))
-        (let* ((sockaddr (ifaddrs-address ifaddr))
-               (address-family (sockaddr-family sockaddr)))
-          (cond
-            ((= +af-inet+ address-family) (unless ipv4 (setf ipv4 (getnameinfo sockaddr))))
-            ((= +af-inet6+ address-family) (unless ipv6 (setf ipv6 (getnameinfo sockaddr))))
-            ((= +af-link+ address-family)
-             (unless mac
-               (let* ((start (sockaddr-dl-interface-name-length sockaddr))
-                      (end (+ start (sockaddr-dl-address-length sockaddr))))
-                 (when (> (- end start) 0)
-                   (setf mac (macaddr->string (sockaddr-dl-data sockaddr) :start start :end end))))))))))
-    (values ipv4 ipv6 mac)))
 
 (define-implementation network-info ()
   (sysctl-string (+ctl-kern+ +kern-hostname+) 255))
