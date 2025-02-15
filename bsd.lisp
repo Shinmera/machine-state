@@ -161,3 +161,24 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
   (let ((prio (priority->process-nice priority)))
     (posix-call "setpriority" :int 0 :uint32 (getpid) :int prio :int))
   (process-priority)) ;; Get the actual priority
+
+(defun split-path (path &optional (delimiter #\:))
+  (let (paths start)
+    (do ((i 0 (1+ i)))
+        ((= i (length path)) (nreverse paths))
+      (when (char= (schar path i) delimiter)
+        (push (subseq path (or start 0) i) paths)
+        (setf start (1+ i))))))
+
+(defun resolve-executable (command)
+  (let ((path (cffi:foreign-funcall "getenv" :string "PATH" :string)))
+    (when path
+      (dolist (dir (split-path path #\:))
+        (let ((exec-path (make-pathname
+                          :defaults (pathname-utils:parse-native-namestring dir :as :directory)
+                          :name command)))
+          (when (probe-file exec-path)
+            (return-from resolve-executable exec-path)))))))
+
+(defun uid->user (uid) (cffi:foreign-funcall "user_from_uid" :uint32 uid :int 1 :string))
+(defun gid->group (gid) (cffi:foreign-funcall "group_from_gid" :uint32 gid :int 1 :string))
