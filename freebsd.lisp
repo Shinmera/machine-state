@@ -40,6 +40,9 @@
           (values (conv idle)
                   (conv (+ user nice sys intr idle))))))))
 
+(define-implementation machine-info ()
+  (values "Unknown" "Unknown" :freebsd (sysctl-string "kern.osrelease" 32)))
+
 (define-implementation machine-core-info ()
   (let ((processor (sysctl-string "hw.model" 128)))
     (values processor
