@@ -162,3 +162,22 @@
 
 (define-implementation network-info ()
   (sysctl-string "kern.hostname" 255))
+
+(cffi:defcstruct (if-data :size 152 ;; #+openbsd 136
+                          :conc-name if-data-)
+  (ibytes :uint64 :offset 64)
+  (obytes :uint64 :offset 72))
+
+(define-implementation network-io-bytes (device)
+  (let ((read 0) (written 0))
+    (do-ifaddrs (ifaddr)
+      (when (string= device (ifaddrs-name ifaddr))
+        (let ((data (ifaddrs-data ifaddr)))
+          (incf read (if-data-ibytes data))
+          (incf written (if-data-obytes data)))))
+    (values (+ read written) read written)))
+
+;;;; TODO: All thread functios
+;;;; TODO: storage-io-bytes
+;;;; TODO: thread-io-bytes
+;;;; TODO: machine-battery
