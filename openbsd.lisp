@@ -33,41 +33,31 @@
 (defun strncmp-lisp (foreign-str lisp-str &key (max-chars (length lisp-str)))
   (= 0 (cffi:foreign-funcall "strncmp" :pointer foreign-str :string lisp-str :size max-chars :int)))
 
-;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L363
-(defconstant +ki-maxcomlen+ 24) ;; ACtually _MAXCOMLEN
-
 ;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L370
 (cffi:defcstruct (kinfo-proc :size 644 :conc-name kinfo-proc-)
   (user-id :uint32 :offset 128) ;; p_uid
   (group-id :uint32 :offset 136) ;; p_gid
   (nice :uint8 :offset 307) ;; p_nice
-  (command-name (:array :char #.+ki-maxcomlen+) :offset 312) ;; p_comm
+  (command-name (:array :char #.+maxcomlen+) :offset 312) ;; p_comm
   (resident-set-size :int32 :offset 384) ;; p_vm_rssize
   (user-time-seconds :uint32 :offset 420) ;; p_uutime_sec
   (user-time-microseconds :uint32 :offset 424) ;; p_uutime_usec
   (thread-id :int32 :offset 608) ;; p_tid
-  (thread-name (:array :char #.+ki-maxcomlen+) :offset 624)) ;; p_name
+  (thread-name (:array :char #.+maxcomlen+) :offset 624)) ;; p_name
 
 ;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L752
 (cffi:defcstruct (kinfo-file :size 624 :conc-name kinfo-file-)
   (read-bytes :uint64 :offset 96) ;; f_rbytes
   (written-bytes :uint64 :offset 104)) ;; f_wbytes
 
-(defun getpid () (cffi:foreign-funcall "getpid" :long)) ;; pid_t
-
 (defmacro with-current-process ((proc) &body body)
-  `(cffi:with-foreign-object (,proc '(:struct kinfo-proc))
-     (sysctl (list +ctl-kern+ +kern-proc+ +kern-proc-pid+
-                   (getpid)
-                   (cffi:foreign-type-size '(:struct kinfo-proc)) 1)
-             ,proc
-             (cffi:foreign-type-size '(:struct kinfo-proc)))
-     ,@body))
+  (let ((size (cffi:foreign-type-size '(:struct kinfo-proc))))
+    `(with-sysctl ((+ctl-kern+ +kern-proc+ +kern-proc-pid+ (getpid) ,size 1) ,proc '(:struct kinfo-proc))
+       ,@body)))
 
 (define-implementation process-room ()
   (with-current-process (proc)
-    (let ((page-size (cffi:foreign-funcall "getpagesize" :int)))
-      (* page-size (kinfo-proc-resident-set-size proc)))))
+    (* (page-size) (kinfo-proc-resident-set-size proc))))
 
 ;;;; These functions are shared between the processes and threads impls
 ;;;; User time only, will differ from output of PS or TOP
@@ -75,32 +65,14 @@
   (+ (kinfo-proc-user-time-seconds kinfo-proc)
      (/ (kinfo-proc-user-time-microseconds kinfo-proc) 1000000.0d0)))
 
-(defconstant +prio-process+ 0)
-(defun %process-priority (kinfo-proc)
-  (let ((value (- (kinfo-proc-nice kinfo-proc) 20))) ;; Will return between 0 (-20) and 40 (20)
-    (cond ((< value -8) :realtime)
-          ((< value  0) :high)
-          ((= value  0) :normal)
-          ((< value +8) :low)
-          (T :idle))))
-
 (define-implementation process-time ()
   (with-current-process (proc)
     (%process-time proc)))
 
 (define-implementation process-priority ()
   (with-current-process (proc)
-    (%process-priority proc)))
-
-(define-implementation (setf process-priority) (priority)
-  (let ((prio (ecase priority
-                (:idle      19)
-                (:low        5)
-                (:normal     0)
-                (:high      -5)
-                (:realtime -20))))
-    (posix-call "setpriority" :int +prio-process+ :uint32 (getpid) :int prio :int))
-  (process-priority)) ;; Get the actual priority
+    (let ((value (- (kinfo-proc-nice proc) 20)))  ;; Will return between 0 (-20) and 40 (20)
+      (process-nice->priority value))))
 
 #+thread-support
 (progn
@@ -274,17 +246,17 @@
 
 (define-implementation machine-info ()
   (values
-   (sysctl-string (list +ctl-hw+ +hw-vendor+) 128)
-   (sysctl-string (list +ctl-hw+ +hw-product+) 128)
+   (sysctl-string (+ctl-hw+ +hw-vendor+) 128)
+   (sysctl-string (+ctl-hw+ +hw-product+) 128)
    :openbsd
-   (sysctl-string (list +ctl-kern+ +kern-osrelease+) 16)))
+   (sysctl-string (+ctl-kern+ +kern-osrelease+) 16)))
 
 (define-implementation machine-core-info ()
-  (let ((processor (sysctl-string (list +ctl-hw+ +hw-model+) 128)))
+  (let ((processor (sysctl-string (+ctl-hw+ +hw-model+) 128)))
     (values processor
             processor ;; There doesn't seem to be a separation between those
             (arch-type)
-            (sysctl-string (list +ctl-hw+ +hw-machine+) 32))))
+            (sysctl-string (+ctl-hw+ +hw-machine+) 32))))
 
 (cffi:defcstruct (stat :size #+32-bit 108
                              #+64-bit 128
@@ -501,6 +473,6 @@
     (values ipv4 ipv6 mac)))
 
 (define-implementation network-info ()
-  (sysctl-string (list +ctl-kern+ +kern-hostname+) 255))
+  (sysctl-string (+ctl-kern+ +kern-hostname+) 255))
 
 ;;;; network-io-bytes is unsupported
