@@ -79,3 +79,14 @@
     (let* ((rusage (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'rusage))
            (tv (cffi:foreign-slot-pointer rusage '(:struct rusage) 'user-time)))
       (timeval->seconds tv))))
+
+(define-implementation process-info ()
+  (with-current-process (proc)
+    (values (let ((command (cffi:foreign-string-to-lisp
+                            (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name))))
+              (or (resolve-executable command) command))
+            (cffi:with-foreign-object (cwd :char 1024)
+              (cffi:foreign-funcall "getcwd" (:pointer :char) cwd :size 1024)
+              (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp cwd :max-chars 1024) :as :directory))
+            (uid->user (kinfo-proc-user-id proc))
+            (gid->group (kinfo-proc-group-id proc)))))

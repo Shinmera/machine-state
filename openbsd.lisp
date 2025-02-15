@@ -120,30 +120,14 @@
         (push (subseq path (or start 0) i) paths)
         (setf start (1+ i))))))
 
-(defun resolve-executable (command)
-  (let ((path (cffi:foreign-funcall "getenv" :string "PATH" :string)))
-    (when path
-      (dolist (dir (split-path path #\:))
-        (let ((exec-path (make-pathname
-                          :defaults (pathname-utils:parse-native-namestring dir :as :directory)
-                          :name command)))
-          (when (probe-file exec-path)
-            (return-from resolve-executable exec-path)))))))
-
 (define-implementation process-info ()
-  (flet ((uid->user (uid) (cffi:foreign-funcall "user_from_uid" :uint32 uid :int 1 :string))
-         (gid->group (gid) (cffi:foreign-funcall "group_from_gid" :uint32 gid :int 1 :string)))
-    (with-current-process (proc)
-      (let ((cwd (cffi:with-foreign-object (cwd :char 1024)
-                   (sysctl (list +ctl-kern+ +kern-proc-cwd+ (getpid)) cwd 1024)
-                   (pathname-utils:parse-native-namestring (cffi:foreign-string-to-lisp cwd) :as :directory)))
-            (command (let ((command (cffi:foreign-string-to-lisp
-                                     (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name))))
-                       (or (resolve-executable command) command))))
-        (values command
-                cwd
-                (uid->user (kinfo-proc-user-id proc))
-                (gid->group (kinfo-proc-group-id proc)))))))
+  (with-current-process (proc)
+    (values (let ((command (cffi:foreign-string-to-lisp
+                            (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name))))
+              (or (resolve-executable command) command))
+            (pathname-utils:parse-native-namestring (sysctl-string (+ctl-kern+ +kern-proc-cwd+ (getpid)) 1024) :as :directory)
+            (uid->user (kinfo-proc-user-id proc))
+            (gid->group (kinfo-proc-group-id proc)))))
 
 (cffi:defcstruct (uvmexp :size 344 :conc-name uvmexp-)
   (pagesize :int :offset 0)
