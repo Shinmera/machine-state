@@ -325,3 +325,5 @@
   (sysctl-string (+ctl-kern+ +kern-hostname+) 255))
 
 ;;;; network-io-bytes is unsupported
+;;;; `struct ifaddrs' has a `void* ifa_data' field which should be an `if_data' struct
+;;;; but this is NULL on OpenBSD, see the FreeBSD code for how it should work

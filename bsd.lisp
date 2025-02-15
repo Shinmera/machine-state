@@ -125,8 +125,8 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
   (usec #+32-bit :uint32 #+64-bit :uint64))
 
 (defun timeval->seconds (tv)
-  (+ (print (timeval-sec tv))
-     (/ (print (timeval-usec tv)) 1000000.0d0)))
+  (+ (timeval-sec tv)
+     (/ (timeval-usec tv) 1000000.0d0)))
 
 (defconstant +unix-epoch+ (encode-universal-time 0 0 0 1 1 1970 0))
 (defun get-unix-time () (- (get-universal-time) +unix-epoch+))
