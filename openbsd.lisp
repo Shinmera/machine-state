@@ -125,7 +125,7 @@
     (values (let ((command (cffi:foreign-string-to-lisp
                             (cffi:foreign-slot-pointer proc '(:struct kinfo-proc) 'command-name))))
               (or (resolve-executable command) command))
-            (pathname-utils:parse-native-namestring (sysctl-string (+ctl-kern+ +kern-proc-cwd+ (getpid)) 1024) :as :directory)
+            (pathname-utils:parse-native-namestring (sysctl-string (list +ctl-kern+ +kern-proc-cwd+ (getpid)) 1024) :as :directory)
             (uid->user (kinfo-proc-user-id proc))
             (gid->group (kinfo-proc-group-id proc)))))
 
@@ -163,7 +163,7 @@
     (cpustats-times cpustats)))
 
 (defun cpu-time ()
-  (sysctl-ref (list (+ctl-kern+ +kern-cptime+)) `(:array :long ,+cpustates++)))
+  (sysctl-ref (list +ctl-kern+ +kern-cptime+) `(:array :long ,+cpustates+)))
 
 ;;;; KERN_CPTIME2 returns wrong values for some reason, KERN_CPUSTATS works better
 (define-implementation machine-time (core)
@@ -197,7 +197,9 @@
 
 (defun find-sensor-number (name &optional (dev 0))
   (cffi:with-foreign-object (sensordev '(:struct sensordev))
-    (let ((ret (sysctl-unchecked (list +ctl-hw+ +hw-sensors+ dev) sensordev (cffi:foreign-type-size '(:struct sensordev)))))
+    (multiple-value-bind (sensordev ret)
+        (sysctl-unchecked (list +ctl-hw+ +hw-sensors+ dev) sensordev (cffi:foreign-type-size '(:struct sensordev)))
+      (print ret)
       (when (= -1 ret)
         (return-from find-sensor-number
           (if (= +enxio+ (errno))
@@ -228,17 +230,17 @@
 
 (define-implementation machine-info ()
   (values
-   (sysctl-string (+ctl-hw+ +hw-vendor+) 128)
-   (sysctl-string (+ctl-hw+ +hw-product+) 128)
+   (sysctl-string (list +ctl-hw+ +hw-vendor+) 128)
+   (sysctl-string (list +ctl-hw+ +hw-product+) 128)
    :openbsd
-   (sysctl-string (+ctl-kern+ +kern-osrelease+) 16)))
+   (sysctl-string (list +ctl-kern+ +kern-osrelease+) 16)))
 
 (define-implementation machine-core-info ()
-  (let ((processor (sysctl-string (+ctl-hw+ +hw-model+) 128)))
+  (let ((processor (sysctl-string (list +ctl-hw+ +hw-model+) 128)))
     (values processor
             processor ;; There doesn't seem to be a separation between those
             (arch-type)
-            (sysctl-string (+ctl-hw+ +hw-machine+) 32))))
+            (sysctl-string (list +ctl-hw+ +hw-machine+) 32))))
 
 (cffi:defcstruct (stat :size #+32-bit 108
                              #+64-bit 128
@@ -323,7 +325,7 @@
                       (block->bytes (statfs-blocks fs))))))))))
 
 (define-implementation network-info ()
-  (sysctl-string (+ctl-kern+ +kern-hostname+) 255))
+  (sysctl-string (list +ctl-kern+ +kern-hostname+) 255))
 
 ;;;; network-io-bytes is unsupported
 ;;;; `struct ifaddrs' has a `void* ifa_data' field which should be an `if_data' struct

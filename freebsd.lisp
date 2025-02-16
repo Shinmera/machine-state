@@ -173,5 +173,4 @@
     (values (+ read written) read written)))
 
 ;;;; TODO: storage-io-bytes
-;;;; TODO: thread-io-bytes
 ;;;; TODO: machine-battery
