@@ -74,7 +74,7 @@
 #+thread-support
 (progn
   (defmacro with-threads ((thread &optional pid) &body body)
-    (let ((mib (gensym)) (%pid (gensym)) (i (gensym)) (nproc (gensym)) (procs (gensym)) (kinfo-proc-size (gensym)))
+    (with-gensyms (mib %pid i nproc procs size)
       ;; Call sysctl once to find how many bytes will be returned
       `(let* ((,%pid (or ,pid (getpid)))
               (,kinfo-proc-size (cffi:foreign-type-size '(:struct kinfo-proc)))
@@ -89,7 +89,7 @@
                  ,@body)))))))
 
   (defmacro with-current-thread ((thread) &body body)
-    (let ((tid (gensym)))
+    (with-gensyms (tid)
       `(let ((,tid (cffi:foreign-funcall "getthrid" :long)))
          (with-threads (,thread)
            (when (= ,tid (kinfo-proc-thread-id ,thread))
@@ -148,8 +148,7 @@
     (- (get-unix-time) (timeval-sec tv))))
 
 (define-implementation machine-cores ()
-  (with-sysctl ((+ctl-hw+ +hw-ncpuonline+) cores :int)
-    (cffi:mem-ref cores :int)))
+  (sysctl-ref (list +ctl-hw+ +hw-ncpuonline+) :int))
 
 (defconstant +cpustates+ 6)
 
@@ -161,8 +160,7 @@
     (cpustats-times cpustats)))
 
 (defun cpu-time ()
-  (with-sysctl ((+ctl-kern+ +kern-cptime+) cpustates :long +cpustates+)
-    (cffi:mem-ref cpustates `(:array :long ,+cpustates+))))
+  (sysctl-ref (list (+ctl-kern+ +kern-cptime+)) `(:array :long ,+cpustates++)))
 
 ;;;; KERN_CPTIME2 returns wrong values for some reason, KERN_CPUSTATS works better
 (define-implementation machine-time (core)
