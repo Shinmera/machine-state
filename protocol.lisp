@@ -208,7 +208,7 @@
   (values "Unknown" "Unknown" (os-type) "Unknown"))
 
 (define-protocol-fun machine-battery () (double-float double-float symbol)
-  (values 0 0 NIL))
+  (values 0.0d0 0.0d0 NIL))
 
 (defun arch-type ()
   (or #+(and x86 (not (or x86-64 amd64))) :X86

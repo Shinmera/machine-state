@@ -388,8 +388,8 @@ Returns three values:
     NIL
 
 If no battery is attached or the function is unsupported, 
-  0
-  0
+  0.0d0
+  0.0d0
   NIL
 are returned.")
 
@@ -490,7 +490,7 @@ See GPU-INFO")
     "Returns information about a network device's addresses.
 
 Returns three values:
-  The device's MAC address as a string
+  The device's MAC address as a string or NIL
   The device's IPv4 address as a string or NIL
   The device's IPv6 address as a string or NIL
 
