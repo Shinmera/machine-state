@@ -1,28 +1,23 @@
 (in-package #:org.shirakumo.machine-state)
 
 (define-implementation machine-room ()
-  (with-sysctls (("hw.pagesize" page-size :uint32)
-                 ("hw.physmem" physmem :uint64)
-                 ("vm.stats.vm.v_free_count" free :uint32))
-    (let ((page-size (cffi:mem-ref page-size :uint32))
-          (physmem (cffi:mem-ref physmem :uint64))
-          (free (cffi:mem-ref free :uint32)))
-      (values (- physmem (* free page-size)) physmem))))
+  (let ((page-size (sysctl-ref "hw.pagesize" :uint32))
+        (physmem (sysctl-ref "hw.physmem" :uint64))
+        (free (sysctl-ref "vm.stats.vm.v_free_count" :uint32)))
+    (values (- physmem (* free page-size)) physmem)))
 
 (define-implementation machine-uptime ()
   (with-sysctl ("kern.boottime" tv '(:struct timeval))
     (- (get-unix-time) (timeval-sec tv))))
 
 (define-implementation machine-cores ()
-  (with-sysctl ("hw.ncpu" cores :int)
-    (cffi:mem-ref cores :int)))
+  (sysctl-ref "hw.ncpu" :int))
 
 ;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/sys/resource.h#L172
 (defconstant +cpustates+ 5)
 
 (defun cpu-time ()
-  (with-sysctl ("kern.cp_time" cpustates :uint64 +cpustates+)
-    (cffi:mem-ref cpustates `(:array :uint64 ,+cpustates+))))
+  (sysctl-ref "kern.cp_time" `(:array :uint64 ,+cpustates+)))
 
 (defun core-time (core)
   (let ((size (* (machine-cores) +cpustates+)))

@@ -1,5 +1,9 @@
 (in-package #:org.shirakumo.machine-state)
 
+(defmacro with-gensyms (syms &body body)
+  `(let ,(mapcar (lambda (sym) `(,sym (gensym (symbol-name ',sym)))) syms)
+     ,@body))
+
 #-openbsd
 (cffi:defcvar (errno "errno") :int64)
 
@@ -17,34 +21,51 @@
   (cffi:foreign-funcall "strerror" :int errno :string))
 
 (defmacro posix-call (function &rest args)
-  (let ((%val (gensym)))
+  (with-gensyms (%val)
     `(let ((,%val (cffi:foreign-funcall ,function ,@args)))
        (if (< ,%val 0)
            (fail (strerror) ,function)
            ,%val))))
 
-(defgeneric sysctl (mib &optional out out-size)
-  (:documentation
-   "Call sysctl with MIB as the list of names, store the result in OUT, which must be of at least OUT-SIZE.
-If OUT is NIL, call sysctl with MIB and return the number of bytes that would be written into OUT."))
-
 #+freebsd
-(defmethod sysctl ((mib string) &optional out out-size)
-  (cffi:with-foreign-object (oldlen :size)
-    (when out
-      (setf (cffi:mem-ref oldlen :size) out-size))
-    (posix-call "sysctlbyname"
-                :string mib
-                :pointer (or out (cffi:null-pointer))
-                (:pointer :size) oldlen
-                :pointer (cffi:null-pointer)
-                :size 0
-                :int)
-    (or out (cffi:mem-ref oldlen :int))))
+(progn
+  (defun count-fields (str separator)
+    (let ((i 1))
+      (loop
+        for ch across str
+        if (char= ch separator)
+          do (incf i))
+      i))
 
-(defmethod sysctl ((mib list) &optional out out-size)
+  (defun sysctl-name-to-mib (name &optional (mibn (count-fields name #\.)))
+    (cffi:with-foreign-objects ((mibp :int mibn) (sizep :size))
+      (setf (cffi:mem-ref sizep :size) mibn)
+      (cffi:foreign-funcall "sysctlnametomib" :string name (:pointer :int) mibp (:pointer :size) sizep)
+      (loop for i below mibn collect (cffi:mem-aref mibp :int i))))
+
+  (defun sysctl-resolve-mib (mib)
+    (etypecase mib
+      (string (sysctl-name-to-mib mib))
+      (list (mapcan (lambda (x)
+                      (etypecase x
+                        (string (sysctl-name-to-mib x))
+                        (number (list x))))
+                    mib)))))
+
+#+openbsd
+(defun sysctl-resolve-mib (mib) mib)
+
+(cffi:defcfun ("sysctl" c-sysctl) :int
+  (mib (:pointer :int))
+  (mibn :uint)
+  (old :pointer)
+  (oldlen (:pointer :size))
+  (new :pointer)
+  (newlen :size))
+
+(defun sysctl (mib out out-size &optional (handle-error t))
+  (setf mib (sysctl-resolve-mib mib))
   (let ((mibn (length mib)))
-    (assert (>= mibn 2) (mib) "Need at least a name and a second level name to call sysctl")
 
     (cffi:with-foreign-objects ((%mib :int mibn) (oldlen :size))
       (loop
@@ -54,58 +75,23 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
       (when out
         (setf (cffi:mem-ref oldlen :size) out-size))
 
-      (posix-call "sysctl"
-                  (:pointer :int) %mib
-                  :uint mibn
-                  :pointer (or out (cffi:null-pointer))
-                  (:pointer :size) oldlen
-                  :pointer (cffi:null-pointer)
-                  :size 0
-                  :int)
+      (let ((ret (c-sysctl %mib mibn (or out (cffi:null-pointer)) oldlen (cffi:null-pointer) 0)))
+        (when (and handle-error (< ret 0))
+          (fail (strerror) "sysctl")))
+
       (or out (cffi:mem-ref oldlen :int)))))
-
-(defun sysctl-unchecked (mib out &optional out-size)
-  "Like SYSCTL but don't handle the ERRNO, useful for when ERRNO has special meanings."
-  (sysctl mib out out-size))
-
-(defun count-fields (str separator)
-  (let ((i 1))
-    (loop
-      for ch across str
-      if (char= ch separator)
-        do (incf i))
-    i))
-
-(defun sysctl-name-to-mib (name &optional (mibn (count-fields name #\.)))
-  (cffi:with-foreign-objects ((mibp :int mibn)
-                              (sizep :size))
-    (setf (cffi:mem-ref sizep :size) mibn)
-    (cffi:foreign-funcall "sysctlnametomib"
-                          :string name
-                          (:pointer :int) mibp
-                          (:pointer :size) sizep)
-    (loop for i below mibn
-          collect (cffi:mem-aref mibp :int i))))
-
-(defun sysctl-resolve-mib (mib-or-name)
-  (etypecase mib-or-name
-    #+freebsd
-    (string mib-or-name)
-    (list (mapcan (lambda (x)
-                    (etypecase x
-                      #+freebsd
-                      (string (sysctl-name-to-mib x))
-                      (number (list x))))
-                  mib-or-name))))
 
 (defmacro with-sysctl ((mib out type &optional (count 1)) &body body)
   "Utility for SYSCTL, MIB is evaluated into a list."
-  (flet ((ensure-list (x) (if (listp x) x (list x))))
-    (let ((%mib (gensym)) (%count (gensym)))
-      `(let* ((,%mib (sysctl-resolve-mib (list ,@(ensure-list mib)))) (,%count ,count))
-         (cffi:with-foreign-object (,out ,type ,%count)
-           (sysctl ,%mib ,out (* ,%count (cffi:foreign-type-size ,type)))
-           ,@body)))))
+  (with-gensyms (%mib %count)
+    `(let* ((,%mib ,(etypecase mib
+                      (list `(list ,@mib))
+                      (string `(list ,mib))
+                      (t mib)))
+            (,%count ,count))
+       (cffi:with-foreign-object (,out ,type ,%count)
+         (sysctl ,%mib ,out (* ,%count (cffi:foreign-type-size ,type)))
+         ,@body))))
 
 (defmacro with-sysctls ((&rest sysctls) &body body)
   "Like with sysctl, but allows for multiple at once."
@@ -114,11 +100,22 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
          (with-sysctls (,@(cdr sysctls)) ,@body))
       `(progn ,@body)))
 
-(defmacro sysctl-string (names size)
-  "Like SYSCTL but the return value is a string of SIZE characters."
-  (let ((%str (gensym)))
-    `(with-sysctl (,names ,%str :char ,size)
-       (cffi:foreign-string-to-lisp ,%str :max-chars ,size))))
+(defun sysctl-unchecked (mib out out-size)
+  "Like SYSCTL but don't handle the ERRNO, useful for when ERRNO has special meanings."
+  (sysctl mib out out-size nil))
+
+(defun sysctl-size (mib)
+  "Call sysctl for the size of what would be returned with MIB, in bytes"
+  (sysctl mib nil nil t))
+
+(defun sysctl-ref (mib type &optional (offset 0))
+  (with-sysctl (mib out type)
+    (cffi:mem-ref out type offset)))
+
+(defun sysctl-string (mib size)
+  "Like SYSCTL but return a string of SIZE characters."
+  (with-sysctl (mib str :char size)
+    (cffi:foreign-string-to-lisp str :max-chars size)))
 
 (cffi:defcstruct (timeval :conc-name timeval-)
   (sec :uint64)
@@ -235,7 +232,7 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
   (getfsstat nil))
 
 (defmacro do-filesystems ((fs) &body body)
-  (let ((statfs (gensym)) (count (gensym)) (i (gensym)))
+  (with-gensyms (statfs count i)
     `(let ((,count (mount-count)))
        (cffi:with-foreign-object (,statfs '(:struct statfs) ,count)
          (getfsstat ,statfs ,count)
@@ -290,7 +287,7 @@ If OUT is NIL, call sysctl with MIB and return the number of bytes that would be
 (defconstant +af-inet6+ #+openbsd 24 #+freebsd 28)
 
 (defmacro do-ifaddrs ((ifaptr) &body body)
-  (let ((ifap (gensym)))
+  (with-gensyms (ifap)
     `(cffi:with-foreign-object (,ifap :pointer)
        (posix-call "getifaddrs" :pointer ,ifap :int)
        (let ((,ifap (cffi:mem-ref ,ifap :pointer)))
