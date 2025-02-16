@@ -42,8 +42,7 @@
 
   (define-test machine-uptime
     (let ((uptime (machine-state:machine-uptime)))
-      (of-type '(unsigned-byte 64) uptime)
-      (is >= 0 uptime)))
+      (of-type '(unsigned-byte 64) uptime)))
 
   (define-test machine-room
     (multiple-value-bind (used total) (machine-state:machine-room)
