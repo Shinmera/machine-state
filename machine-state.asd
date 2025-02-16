@@ -11,7 +11,7 @@
   :components ((:file "package")
                (:file "protocol")
                (:file "windows" :if-feature (:or :windows :win32))
-               (:file "posix" :if-feature (:and (:not (:or :openbsd :freebsd))
+               (:file "posix" :if-feature (:and (:not (:or :openbsd))
                                                 (:or :posix :linux :darwin :bsd)))
                (:file "darwin" :if-feature :darwin)
                (:file "bsd" :if-feature :bsd)
