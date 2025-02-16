@@ -19,21 +19,25 @@
              (is > idle total)))
 
       ;; Test the aggregate
-      (multiple-value-bind (cpu-idle cpu-total) (machine-state:machine-time t)
-        (test cpu-idle cpu-total)
+      (let ((core-times (loop for i below (machine-state:machine-cores)
+                              collect (multiple-value-list (machine-state:machine-time i)))))
 
-        (let ((nproc (machine-state:machine-cores)))
-          (dotimes (core nproc)
-            (multiple-value-bind (core-idle core-total) (machine-state:machine-time core)
-              ;; Test core against CPU
-              (is <= cpu-idle core-idle)
-              (is <= cpu-total core-total)
+        (multiple-value-bind (cpu-idle cpu-total) (machine-state:machine-time t)
+          (test cpu-idle cpu-total)
 
-              ;; Test cores
-              (test core-idle core-total)))
+          (let ((nproc (machine-state:machine-cores)))
+            (dolist (core core-times)
+              (destructuring-bind (core-idle core-total) core
 
-          (fail (machine-state:machine-time nproc) 'machine-state:query-failed
-                "Non existant core expected to fail")))))
+                ;; Test core against CPU
+                (is <= cpu-idle core-idle)
+                (is <= cpu-total core-total)
+
+                ;; Test cores
+                (test core-idle core-total)))
+
+            (fail (machine-state:machine-time nproc) 'machine-state:query-failed
+                  "Non existant core expected to fail"))))))
 
   (define-test machine-cores
     (let ((nproc (machine-state:machine-cores)))
