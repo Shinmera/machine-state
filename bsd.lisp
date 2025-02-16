@@ -77,9 +77,8 @@
 
       (let ((ret (c-sysctl %mib mibn (or out (cffi:null-pointer)) oldlen (cffi:null-pointer) 0)))
         (when (and handle-error (< ret 0))
-          (fail (strerror) "sysctl")))
-
-      (or out (cffi:mem-ref oldlen :int)))))
+          (fail (strerror) "sysctl"))
+        (values (or out (cffi:mem-ref oldlen :int)) ret)))))
 
 (defmacro with-sysctl ((mib out type &optional (count 1)) &body body)
   "Utility for SYSCTL, MIB is evaluated into a list."
@@ -101,7 +100,8 @@
       `(progn ,@body)))
 
 (defun sysctl-unchecked (mib out out-size)
-  "Like SYSCTL but don't handle the ERRNO, useful for when ERRNO has special meanings."
+  "Like SYSCTL but don't handle the ERRNO, the return value of SYSCTL is in the second value.
+ Useful for when ERRNO has special meanings."
   (sysctl mib out out-size nil))
 
 (defun sysctl-size (mib)
