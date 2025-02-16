@@ -42,11 +42,6 @@
   (thread-id :int32 :offset 608) ;; p_tid
   (thread-name (:array :char #.+maxcomlen+) :offset 624)) ;; p_name
 
-;;;; https://github.com/openbsd/src/blob/master/sys/sys/sysctl.h#L752
-(cffi:defcstruct (kinfo-file :size 624 :conc-name kinfo-file-)
-  (read-bytes :uint64 :offset 96) ;; f_rbytes
-  (written-bytes :uint64 :offset 104)) ;; f_wbytes
-
 (defmacro with-current-process ((proc) &body body)
   (let ((size (cffi:foreign-type-size '(:struct kinfo-proc))))
     `(with-sysctl ((+ctl-kern+ +kern-proc+ +kern-proc-pid+ (getpid) ,size 1) ,proc '(:struct kinfo-proc))
