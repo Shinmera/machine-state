@@ -269,12 +269,16 @@
              (loop until (cffi:null-pointer-p ifaddrs)
                    do (when (string= device (ifaddrs-name ifaddrs))
                         (let ((address (ifaddrs-addr ifaddrs)))
-                          (case (sockaddr4-family address)
-                            (2 (setf ipv4 (ipv4-str (sockaddr4-addr address))))
-                            (10 (setf ipv6 (ipv6-str (sockaddr6-addr address)))))))
+                          (unless (cffi:null-pointer-p address) ;; Address can be NULL for Wireguard for example
+                            (case (sockaddr4-family address)
+                              (2 (setf ipv4 (ipv4-str (sockaddr4-addr address))))
+                              (10 (setf ipv6 (ipv6-str (sockaddr6-addr address))))))))
                       (setf ifaddrs (ifaddrs-next ifaddrs)))
              (values (with-open-file (o (format NIL "/sys/class/net/~a/address" device) :if-does-not-exist NIL)
-                       (if o (read-line o)
+                       (if o
+                           (let ((addr (read-line o)))
+                             (when (> (length addr) 0) ;; This file can be empty
+                               addr))
                            (fail "No such device.")))
                      ipv4
                      ipv6))
