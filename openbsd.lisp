@@ -71,18 +71,25 @@
     (let ((value (- (kinfo-proc-nice proc) 20)))  ;; Will return between 0 (-20) and 40 (20)
       (process-nice->priority value))))
 
+(define-implementation (setf process-priority) (priority)
+  (let ((prio (priority->process-nice priority)))
+    (posix-call "setpriority" :int 0 :uint32 (getpid) :int prio :int))
+  (process-priority)) ;; Get the actual priority
+
 #+thread-support
 (progn
   (defmacro with-threads ((thread &optional pid) &body body)
     (with-gensyms (mib %pid i nproc procs size)
       ;; Call sysctl once to find how many bytes will be returned
       `(let* ((,%pid (or ,pid (getpid)))
-              (,kinfo-proc-size (cffi:foreign-type-size '(:struct kinfo-proc)))
-              (,mib (list +ctl-kern+ +kern-proc+ (logior +kern-proc-pid+ +kern-proc-show-threads+) ,%pid ,kinfo-proc-size 0))
-              (,nproc (ceiling (/ (sysctl ,mib nil) ,kinfo-proc-size))))
+              (,size (cffi:foreign-type-size '(:struct kinfo-proc)))
+              (,mib (sysctl-resolve-mib
+                     (list +ctl-kern+ +kern-proc+ (logior +kern-proc-pid+ +kern-proc-show-threads+) ,%pid ,size 0)))
+              (,nproc (ceiling (/ (sysctl-size ,mib) ,size))))
+
          (rplaca (last ,mib) ,nproc)
-         (cffi:with-foreign-object (,procs '(:struct kinfo-proc) ,nproc)
-           (sysctl ,mib ,procs (* (cffi:foreign-type-size '(:struct kinfo-proc)) ,nproc))
+
+         (with-sysctl (,mib ,procs '(:struct kinfo-proc) ,nproc)
            (dotimes (,i ,nproc)
              (let ((,thread (cffi:mem-aptr ,procs '(:struct kinfo-proc) ,i)))
                (when (> (kinfo-proc-thread-id ,thread) 1)
@@ -96,12 +103,13 @@
              (return ,@body))))))
 
   (defmacro with-current-thread-handle ((handle thread &optional (default 0)) &body body)
-    `(if (or (eql ,thread T)
-             (eql ,thread (bt:current-thread)))
-         (with-current-thread (,handle)
-           ,@body)
-         ,default))
-
+    (with-gensyms (%thread)
+      `(let ((,%thread ,thread))
+         (if (or (eql ,%thread T)
+                 (eql ,%thread (bt:current-thread)))
+             (with-current-thread (,handle)
+               ,@body)
+             ,default))))
   (define-implementation thread-time (thread)
     (with-current-thread-handle (handle thread 0.0d0)
       (%process-time handle))))

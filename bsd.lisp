@@ -157,11 +157,6 @@
     (:high      -5)
     (:realtime -20)))
 
-(define-implementation (setf process-priority) (priority)
-  (let ((prio (priority->process-nice priority)))
-    (posix-call "setpriority" :int 0 :uint32 (getpid) :int prio :int))
-  (process-priority)) ;; Get the actual priority
-
 (defun split-path (path &optional (delimiter #\:))
   (let (paths start)
     (do ((i 0 (1+ i)))

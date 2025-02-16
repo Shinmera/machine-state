@@ -172,7 +172,6 @@
           (incf written (if-data-obytes data)))))
     (values (+ read written) read written)))
 
-;;;; TODO: All thread functios
 ;;;; TODO: storage-io-bytes
 ;;;; TODO: thread-io-bytes
 ;;;; TODO: machine-battery
