@@ -77,7 +77,8 @@
       (of-type 'double-float full)
       (is member '(:CHARGING :DISCHARGING :FULL nil) state)
       (is >= 0.0d0 current)
-      (is >= 0.0d0 full)))
+      (is >= 0.0d0 full)
+      (is <= full current)))
 
 ;;;; Processes
 
