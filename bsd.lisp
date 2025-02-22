@@ -336,3 +336,19 @@
                  (when addr
                    (setf mac (macaddr->string addr))))))))))
     (values ipv4 ipv6 mac)))
+
+(defconstant +o-rdonly+ 0)
+(defconstant +o-wronly+ 1)
+(defconstant +o-rdwr+ 2)
+
+(defmacro with-fd ((fd file &key (direction :input)) &body body)
+  `(let ((,fd (posix-call "open"
+                          :string (pathname-utils:native-namestring ,file)
+                          :int ,(ecase direction
+                                  (:input +o-rdonly+)
+                                  (:output +o-wronly+)
+                                  (:io +o-rdwr+))
+                          :int)))
+     (unwind-protect
+          (progn ,@body)
+       (posix-call "close" :int ,fd :int))))
