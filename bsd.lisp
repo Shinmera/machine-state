@@ -30,12 +30,12 @@
 #+freebsd
 (progn
   (defun count-fields (str separator)
-    (let ((i 1))
-      (loop
-        for ch across str
-        if (char= ch separator)
-          do (incf i))
-      i))
+    (reduce (lambda (count ch)
+              (if (char= ch separator)
+                  (1+ count)
+                  count))
+            str
+            :initial-value 1))
 
   (defun sysctl-name-to-mib (name &optional (mibn (count-fields name #\.)))
     (cffi:with-foreign-objects ((mibp :int mibn) (sizep :size))
@@ -325,12 +325,10 @@
       (when (string= device (ifaddrs-name ifaddr))
         (let* ((sockaddr (ifaddrs-address ifaddr))
                (address-family (sockaddr-family sockaddr)))
-          (cond
-            ((= +af-inet+ address-family)
-             (unless ipv4 (setf ipv4 (ipv4->string (sockaddr4-addr sockaddr)))))
-            ((= +af-inet6+ address-family)
-             (unless ipv6 (setf ipv6 (ipv6->string (sockaddr6-addr sockaddr)))))
-            ((= +af-link+ address-family)
+          (case address-family
+            (#.+af-inet+ (unless ipv4 (setf ipv4 (ipv4->string (sockaddr4-addr sockaddr)))))
+            (#.+af-inet6+ (unless ipv6 (setf ipv6 (ipv6->string (sockaddr6-addr sockaddr)))))
+            (#.+af-link+
              (unless mac
                (let ((addr (sockaddr-dl-address sockaddr)))
                  (when addr
