@@ -172,5 +172,100 @@
           (incf written (if-data-obytes data)))))
     (values (+ read written) read written)))
 
-;;;; TODO: storage-io-bytes
-;;;; TODO: machine-battery
+;;;; Reference:
+;;;; https://github.com/freebsd/freebsd-src/blob/main/usr.sbin/acpi/acpiconf/acpiconf.c
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/dev/acpica/acpiio.h
+
+(cffi:defcstruct (acpi-battinfo :size 16))
+(cffi:defcstruct (acpi-bif :size 164))
+
+;; https://github.com/freebsd/freebsd-src/blob/main/usr.sbin/acpi/acpiconf/acpiconf.c#L82
+(defconstant +unknown-cap+ #xffffffff)
+(defconstant +unknown-voltage+ #xffffffff)
+
+(cffi:defcstruct (acpi-bst :size 16 :conc-name acpi-bst-)
+  (state :uint32) ;; state
+  (rate :uint32) ;; rate
+  (capacity :uint32) ;; cap
+  (voltage :uint32)) ;; volts
+
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/dev/acpica/acpiio.h#L76
+(cffi:defcstruct (acpi-bix :size 256 :conc-name acpi-bix-)
+  (units :uint32 :offset 0) ;; units
+  (design-capacity :uint32 :offset 4) ;; dcap
+  (last-full-capacity :uint32 :offset 8) ;; lfcap
+  (design-volts :uint32 :offset 16)) ;; dvol
+
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/dev/acpica/acpiio.h#L175
+(cffi:defcunion acpi-battery-ioctl-arg
+  (unit :int)
+  (battinfo (:struct acpi-battinfo))
+  (bix (:struct acpi-bix))
+  (bif (:struct acpi-bif))
+  (bst (:struct acpi-bst)))
+
+(defconstant +acpi-bix-units-mw+ 0)
+(defconstant +acpi-bix-units-ma+ 1)
+(defun acpi-bix-last-full-capacity-mAh (bix)
+  (flet ((mWh->mAh (mWh mV)
+           (/ mWh (* 1000 mV))))
+    (let ((last (acpi-bix-last-full-capacity bix))
+          (unit (acpi-bix-units bix)))
+      (cond
+        ((= +unknown-cap+ last) 0.0d0)
+        ((= +acpi-bix-units-mw+ unit)
+         (let ((mV (acpi-bix-design-volts bix)))
+           (if (= +unknown-voltage+ mV)
+               0.0d0
+               (mWh->mAh last mV))))
+        ((= +acpi-bix-units-ma+ unit) last)
+        (t 0.0d0)))))
+
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/dev/acpica/acpiio.h#L188
+(defconstant +acpiio-bat-get-bix+ 3238019600)
+(defconstant +acpiio-bat-get-bst+ 3238019601)
+
+(defun battery-last-full-capacity (acpifd battio battn)
+  (setf (cffi:foreign-slot-value battio '(:union acpi-battery-ioctl-arg) 'unit) battn)
+  (posix-call "ioctl" :int acpifd :unsigned-long +acpiio-bat-get-bix+ :pointer battio :int)
+  (let ((bix (cffi:foreign-slot-pointer battio '(:union acpi-battery-ioctl-arg) 'bix)))
+    (acpi-bix-last-full-capacity-mAh bix)))
+
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/dev/acpica/acpiio.h#L157
+(defconstant +acpi-batt-stat-discharg+ 1)
+(defconstant +acpi-batt-stat-charging+ 2)
+(defconstant +acpi-batt-stat-critical+ 4)
+(defconstant +acpi-batt-stat-invalid+ (logior +acpi-batt-stat-discharg+ +acpi-batt-stat-charging+))
+(defconstant +acpi-batt-stat-bst-mask+ (logior +acpi-batt-stat-invalid+ +acpi-batt-stat-critical+))
+(defconstant +acpi-batt-stat-not-present+ +acpi-batt-stat-bst-mask+)
+
+(defun battery-state (acpifd battio battn)
+  (setf (cffi:foreign-slot-value battio '(:union acpi-battery-ioctl-arg) 'unit) battn)
+  (posix-call "ioctl" :int acpifd :unsigned-long +acpiio-bat-get-bst+ :pointer battio :int)
+  (let* ((bst (cffi:foreign-slot-pointer battio '(:union acpi-battery-ioctl-arg) 'bix))
+         (remaining-capacity (acpi-bst-capacity bst))
+         (state (acpi-bst-state bst)))
+    (values (if (or (= remaining-capacity +unknown-cap+)
+                    (= remaining-capacity -1))
+                0.0d0
+                remaining-capacity)
+            (if (= +acpi-batt-stat-not-present+ state)
+                nil
+                (ecase (logand state +acpi-batt-stat-bst-mask+)
+                  (0 :charging) ;; 0 is reported as "high" on acpiconf
+                  (#.+acpi-batt-stat-charging+ :charging)
+                  (#.+acpi-batt-stat-discharg+ :discharging)
+                  (t nil))))))
+
+(define-implementation machine-battery ()
+  (with-fd (acpifd #P"/dev/acpi" :direction :input)
+    (cffi:with-foreign-object (battio '(:union acpi-battery-ioctl-arg))
+      (let ((last-full-capacity (battery-last-full-capacity acpifd battio 0)))
+        (multiple-value-bind (remaining-capacity state) (battery-state acpifd battio 0)
+          (values (float remaining-capacity 0.0d0)
+                  (float last-full-capacity 0.0d0)
+                  ;; There doesn't seem to be a "full" state, full capacity still shows as charging
+                  ;; so detect it manually
+                  (if (= remaining-capacity last-full-capacity)
+                      :full
+                      state)))))))
