@@ -242,12 +242,6 @@
             (arch-type)
             (sysctl-string (list +ctl-hw+ +hw-machine+) 32))))
 
-(cffi:defcstruct (stat :size #+32-bit 108
-                             #+64-bit 128
-                       :conc-name stat-)
-  (mode    :int :offset 0) ;; st_mode
-  (dev     :int :offset 4)) ;; st_dev
-
 (defconstant +mfsnamelen+ 16)
 (defconstant +mnamelen+ 90)
 

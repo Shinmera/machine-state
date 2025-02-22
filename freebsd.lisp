@@ -89,23 +89,17 @@
             (uid->user (kinfo-proc-user-id proc))
             (gid->group (kinfo-proc-group-id proc)))))
 
-(cffi:defcstruct (stat :size 224 #| 64-bit |# :conc-name stat-)
-  (dev     :int :offset 0) ;; st_dev
-  (mode    :int :offset 24)) ;; st_mode
+(defconstant +mfsnamelen+ 16) ;; https://github.com/freebsd/freebsd-src/blob/main/sys/sys/mount.h#L78
+(defconstant +mnamelen+ 1024) ;; https://github.com/freebsd/freebsd-src/blob/main/sys/sys/mount.h#L79
 
-(defconstant +mnamelen+ 1024)
-
-#+64-bit
+;;;; https://github.com/freebsd/freebsd-src/blob/main/sys/sys/mount.h#L81
 (cffi:defcstruct (statfs :size 2344 :conc-name statfs-)
-  (block-size :uint32 :offset 16)
-  (blocks :uint64 :offset 32)
-  (available-blocks :int64 :offset 48) ;; Blocks available to non-superuser
-  (synchronous-writes :uint64 :offset 72)
-  (synchronous-reads :uint64 :offset 80)
-  (asynchronous-writes :uint64 :offset 88)
-  (asynchronous-reads :uint64 :offset 96)
-  (device (:array :char #.+mnamelen+) :offset 296)
-  (mountpoint (:array :char #.+mnamelen+) :offset 1320))
+  (block-size :uint32 :offset 16) ;; f_bsize
+  (blocks :uint64 :offset 32) ;; f_blocks
+  (available-blocks :int64 :offset 48) ;; f_bavail ;; Blocks available to non-superuser
+  (fs-type (:array :char #.+mfsnamelen+) :offset 280) ;; f_fstypename
+  (device (:array :char #.+mnamelen+) :offset 296) ;; f_mntfromname
+  (mountpoint (:array :char #.+mnamelen+) :offset 1320)) ;; f_mntonname
 
 (define-implementation storage-device (path)
   (let ((mount-root (pathname-utils:native-namestring (pathname-force-file (find-mount-root path)))))
@@ -122,24 +116,6 @@
         (return (pathname-utils:parse-native-namestring
                  (cffi:foreign-string-to-lisp
                   (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint) :max-chars +mnamelen+)))))))
-
-;;;; TODO: does NOT work with ZFS
-(define-implementation storage-io-bytes (path)
-  (setf path (pathname-utils:native-namestring
-              (pathname-force-file
-               (etypecase path
-                 (pathname (find-mount-root path))
-                 (string (storage-device-path path))))))
-
-  (do-filesystems (fs)
-    (let ((fs-mountpoint (cffi:foreign-slot-pointer fs '(:struct statfs) 'mountpoint)))
-      (when (strncmp-lisp fs-mountpoint path :max-chars +mnamelen+)
-        (let ((reads (+ (statfs-synchronous-reads fs)
-                        (statfs-asynchronous-reads fs)))
-              (writes (+ (statfs-synchronous-writes fs)
-                         (statfs-asynchronous-writes fs))))
-          (return-from storage-io-bytes
-            (values (+ reads writes) reads writes)))))))
 
 (define-implementation storage-room (path)
   (when (stringp path)
