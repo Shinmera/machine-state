@@ -117,9 +117,15 @@
   (with-sysctl (mib str :char size)
     (cffi:foreign-string-to-lisp str :max-chars size)))
 
+#+32-bit
+(cffi:defcstruct (timeval :conc-name timeval-)
+  (sec :uint32)
+  (usec :uint32))
+
+#+64-bit
 (cffi:defcstruct (timeval :conc-name timeval-)
   (sec :uint64)
-  (usec #+32-bit :uint32 #+64-bit :uint64))
+  (usec :uint64))
 
 (defun timeval->seconds (tv)
   (+ (timeval-sec tv)
@@ -187,6 +193,7 @@
 
 #+freebsd
 (cffi:defcstruct (stat :size #+64-bit 224
+                             #+32-bit 208
                        :conc-name stat-)
   (dev :int :offset 0) ;; st_dev
   (mode :int :offset 24)) ;; st_mode
