@@ -118,6 +118,11 @@
 
 (define-implementation machine-room ()
   (cffi:with-foreign-objects ((memory-status '(:struct memory-status)))
+    (setf (memory-status-length memory-status)
+          (cffi:foreign-type-size '(:struct memory-status)))
+    (windows-call "GlobalMemoryStatusEx"
+                  :pointer memory-status
+                  :bool)
     (let ((available (memory-status-available-physical memory-status))
           (total (memory-status-total-physical memory-status)))
       (values (- total available)
