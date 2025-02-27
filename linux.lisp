@@ -180,7 +180,7 @@
                (writes :unsigned-long-long))
          ("/proc/net/dev" "%31s %llu %*u %*u %*u %*u %*u %*u %*u %llu %*u"
                           (fail "No such device."))
-       (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size (min 32 (1- (length device))) :int))
+       (when (= 0 (cffi:foreign-funcall "strncmp" :pointer name :string device :size (min 32 (length device)) :int))
          (return (values (+ reads writes)
                          reads
                          writes)))))))
