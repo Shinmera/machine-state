@@ -5,6 +5,7 @@ This library implements various functions to access status information about the
 Since this is a toolkit library, please simply refer to the symbol index for available functions and their behaviour. The following groups of functions are available:
 
 - Process
+  - ``process-info``
   - ``process-io-bytes``
   - ``process-room``
   - ``process-time``
@@ -19,19 +20,23 @@ Since this is a toolkit library, please simply refer to the symbol index for ava
   - ``static-room``
   - ``stack-room``
 - GPU
+  - ``gpu-info``
   - ``gpu-room``
   - ``gpu-time``
 - Physical Machine
+  - ``machine-info``
   - ``machine-room``
   - ``machine-cores``
   - ``machine-uptime``
   - ``machine-time``
+  - ``machine-battery``
 - Storage Devices
   - ``storage-device``
   - ``storage-device-path``
   - ``storage-room``
   - ``storage-io-bytes``
 - Network Devices
+  - ``network-info``
   - ``network-devices``
   - ``network-io-bytes``
 
