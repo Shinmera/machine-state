@@ -88,6 +88,7 @@
     (windows-call "GetProcessMemoryInfo"
                   :pointer (process)
                   :pointer memory-counters
+                  :uint32 (cffi:foreign-type-size '(:struct memory-counters))
                   :bool)
     (memory-counters-working-set-size memory-counters)))
 
