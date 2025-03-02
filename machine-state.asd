@@ -14,7 +14,7 @@
                (:file "posix" :if-feature (:and (:not :openbsd)
                                                 (:or :posix :linux :darwin :bsd)))
                (:file "darwin" :if-feature :darwin)
-               (:file "bsd" :if-feature :bsd)
+               (:file "bsd" :if-feature (:and :bsd (:not :darwin)))
                (:file "freebsd" :if-feature :freebsd)
                (:file "openbsd" :if-feature :openbsd)
                (:file "linux" :if-feature :linux)
