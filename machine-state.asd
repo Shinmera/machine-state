@@ -4,9 +4,9 @@
   :author "Yukari Hafner <shinmera@tymoon.eu>"
   :maintainer "Yukari Hafner <shinmera@tymoon.eu>"
   :description "Retrieve machine state information about CPU time, memory usage, etc."
-  :homepage "https://shinmera.github.io/machine-state/"
-  :bug-tracker "https://github.com/shinmera/machine-state/issues"
-  :source-control (:git "https://github.com/shinmera/machine-state.git")
+  :homepage "https://shinmera.com/docs/machine-state/"
+  :bug-tracker "https://shinmera.com/project/machine-state/issues"
+  :source-control (:git "https://shinmera.com/project/machine-state.git")
   :serial T
   :components ((:file "package")
                (:file "protocol")
